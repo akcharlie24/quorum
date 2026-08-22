@@ -1,0 +1,10 @@
+[
+  { "name": "Web-Shooter Mk II", "price": 129.99, "rating": 4.8, "stock": 12 },
+  { "name": "Spidey Suit Classic", "price": 249.5, "rating": 4.9, "stock": 5 },
+  { "name": "Utility Belt Pro", "price": 59.0, "rating": 4.2, "stock": 34 },
+  { "name": "Wall-Crawl Gloves", "price": 89.95, "rating": 4.5, "stock": 21 },
+  { "name": "Spider-Tracer 6-Pack", "price": 19.99, "rating": 3.9, "stock": 120 },
+  { "name": "Daily Bugle Press Pass", "price": 9.5, "rating": 4.0, "stock": 77 },
+  { "name": "Symbiote Repellent Spray", "price": 44.25, "rating": 4.7, "stock": 8 },
+  { "name": "Aunt May's Wheatcakes Mix", "price": 12.75, "rating": 5.0, "stock": 42 }
+]

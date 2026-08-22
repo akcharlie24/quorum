@@ -1,0 +1,18 @@
+{
+  "name": "silk",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SILK — the immune system for web scrapers (Scrape-Verse hackathon)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "silk": "tsx packages/core/src/cli.ts",
+    "demo:build": "node apps/demo-target/build.mjs",
+    "demo:deploy": "node apps/demo-target/build.mjs && cd apps/demo-target && vercel deploy --prod --yes"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
