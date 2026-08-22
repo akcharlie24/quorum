@@ -103,7 +103,7 @@ export function rowKeyOf(row: Row, schema: TargetSchema): string {
     .trim();
 }
 
-function valuesEqual(a: unknown, b: unknown, type: string): boolean {
+export function valuesEqual(a: unknown, b: unknown, type: string): boolean {
   if (a === null || a === undefined || b === null || b === undefined) return a === b;
   if (type === "number" || type === "integer") {
     return Math.abs(Number(a) - Number(b)) <= NUM_TOLERANCE;

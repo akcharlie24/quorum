@@ -205,8 +205,16 @@ export async function runScraper(
 
 export interface HealResponse {
   status: string; // e.g. "awaiting_approval"
-  preview: unknown[]; // preview rows of the fixed output, when provided
+  preview: unknown[]; // sample rows of the fixed output
+  /** Rows the preview says it omitted ("223 more items"); previews are truncated. */
+  truncatedCount: number;
   raw: CliResult;
+}
+
+/** Bright Data truncates heal previews with a literal "N more items" entry. */
+export function extractTruncatedCount(preview: unknown): number {
+  const m = JSON.stringify(preview ?? "").match(/(\d+)\s+more items/);
+  return m ? Number(m[1]) : 0;
 }
 
 /** Trigger self-healing. Default gate: returns awaiting_approval + preview. Never --auto-approve. */
@@ -220,16 +228,13 @@ export async function healScraper(
     timeoutMs,
   );
   const j = (res.json ?? {}) as Record<string, unknown>;
-  const preview = Array.isArray(j.preview)
-    ? j.preview
-    : Array.isArray(j.data)
-      ? j.data
-      : Array.isArray(j.sample)
-        ? j.sample
-        : [];
+  // The live field is `preview_result`; the others are kept as fallbacks.
+  const preview =
+    [j.preview_result, j.preview, j.data, j.sample].find((v): v is unknown[] => Array.isArray(v)) ?? [];
   return {
     status: String(j.status ?? (res.ok ? "unknown" : "error")),
     preview,
+    truncatedCount: extractTruncatedCount(preview),
     raw: res,
   };
 }

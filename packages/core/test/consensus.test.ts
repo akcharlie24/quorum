@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { coerce, consensus, normalizeRows } from "../src/consensus.ts";
-import { previewMatchScore } from "../src/healer.ts";
-import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.ts";
-import { sanitizePrompt } from "../src/brightdata.ts";
-import type { TargetSchema } from "../src/types.ts";
+import { coerce, consensus, normalizeRows } from "../src/consensus.js";
+import { scorePreview } from "../src/healer.js";
+import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.js";
+import { extractTruncatedCount, sanitizePrompt } from "../src/brightdata.js";
+import type { TargetSchema } from "../src/types.js";
 
 const schema: TargetSchema = {
   keyField: "name",
@@ -154,11 +154,37 @@ test("numeric tolerance: 129.99 vs 129.985 agree", () => {
   assert.ok(res.verdicts.every((v) => v.status === "healthy"));
 });
 
-test("previewMatchScore: perfect preview ~1, garbage preview ~0", () => {
+test("scorePreview: accurate preview scores high, corrupted low, empty zero", () => {
   const target = { id: 1, name: "t", url: "u", schema } as const;
   const consensusRows = normalizeRows(good, schema);
-  assert.ok(previewMatchScore(good, consensusRows, target) > 0.95);
+  assert.ok(scorePreview(good, consensusRows, target).precision > 0.95);
   const garbage = good.map((r) => ({ ...r, price: 0, stock: 999 }));
-  assert.ok(previewMatchScore(garbage, consensusRows, target) < 0.9);
-  assert.equal(previewMatchScore([], consensusRows, target), 0);
+  assert.ok(scorePreview(garbage, consensusRows, target).precision < 0.9);
+  assert.equal(scorePreview([], consensusRows, target).precision, 0);
+});
+
+test("scorePreview handles Bright Data's truncated previews", () => {
+  // real shape: a couple of rows plus a literal "N more items" marker
+  const movieSchema: TargetSchema = { keyField: "title", fields: { title: "string", rating: "number" } };
+  const target = { id: 1, name: "imdb", url: "u", schema: movieSchema } as const;
+  const consensusRows = normalizeRows(
+    Array.from({ length: 250 }, (_, i) => ({ title: `Movie ${i}`, rating: 9 - i / 100 })),
+    movieSchema
+  );
+  const preview = [
+    { movies: [{ title: "Movie 0", rating: 9 }, { title: "Movie 1", rating: 8.99 }, "223 more items"] },
+  ];
+
+  const s = scorePreview(preview, consensusRows, target, extractTruncatedCount(preview));
+  // precision is judged on the visible sample, not on the truncated total
+  assert.equal(s.sampleRows, 2);
+  assert.equal(s.precision, 1);
+  assert.equal(s.claimedRows, 225);
+  assert.ok(s.claimedRows >= consensusRows.length * 0.5, "225 of 250 clears the cardinality floor");
+
+  // a fix that is accurate but returns almost nothing must not pass
+  const stingy = [{ movies: [{ title: "Movie 0", rating: 9 }] }];
+  const s2 = scorePreview(stingy, consensusRows, target, extractTruncatedCount(stingy));
+  assert.equal(s2.precision, 1);
+  assert.ok(s2.claimedRows < consensusRows.length * 0.5, "1 of 250 must fail the cardinality floor");
 });
