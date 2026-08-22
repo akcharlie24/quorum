@@ -66,6 +66,15 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
   const strategyOf = (variantId: number) =>
     detail.variants.find((v) => v.id === variantId)?.strategy ?? `#${variantId}`;
 
+  // A retired variant disappears until its replacement is built; show it as pending
+  // rather than letting the card silently vanish for 25 minutes.
+  const present = new Set(detail.variants.map((v) => v.strategy));
+  const buildingStrategies = (
+    activeJob?.kind === "flock"
+      ? (Object.keys(STRATEGY_LABEL) as (keyof typeof STRATEGY_LABEL)[])
+      : []
+  ).filter((s) => !present.has(s));
+
   return (
     <>
       <div className="crumb">
@@ -148,6 +157,19 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
                 )}
               </div>
             </Reveal>
+          ))}
+          {buildingStrategies.map((strategy) => (
+            <div className="vcard is-pending" key={`building-${strategy}`} style={{ opacity: 0.75 }}>
+              <div className="vcard-top">
+                <h4>{STRATEGY_LABEL[strategy]}</h4>
+                <span className="pill pill-pending">
+                  <span className="spinner" style={{ marginRight: 0 }} />
+                  building
+                </span>
+              </div>
+              <div className="blurb">{STRATEGY_BLURB[strategy]}</div>
+              <div className="cid faint">Bright Data is generating this scraper (10-25 min)…</div>
+            </div>
           ))}
         </div>
       </div>
