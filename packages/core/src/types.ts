@@ -4,6 +4,10 @@ export type FieldType = "string" | "number" | "integer";
 export type TargetSchema = {
   keyField: string;
   fields: Record<string, FieldType>;
+  /** What one row represents, e.g. "product", "job posting". Used in scraper prompts. */
+  itemLabel?: string;
+  /** Optional extra instruction from the user about what to extract. */
+  description?: string;
 };
 
 export type Row = Record<string, unknown>;

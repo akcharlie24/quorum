@@ -12,7 +12,7 @@ import {
   upsertTarget,
 } from "./db.js";
 import { runCycle } from "./runner.js";
-import { STRATEGY_PROMPTS } from "./strategies.js";
+import { strategyPrompts } from "./strategies.js";
 import type { TargetSchema, VariantStrategy } from "./types.js";
 
 loadEnv();
@@ -20,6 +20,7 @@ loadEnv();
 const DEFAULT_SCHEMA: TargetSchema = {
   keyField: "name",
   fields: { name: "string", price: "number", rating: "number", stock: "integer" },
+  itemLabel: "product",
 };
 
 const [, , cmd, ...args] = process.argv;
@@ -44,7 +45,7 @@ async function main() {
       if (!url || !name) usage();
       const target = upsertTarget(name, url, DEFAULT_SCHEMA);
       console.log(pc.bold(`Creating flock for ${name} (${url}) — 3 variants, 5-25 min each, running in parallel…`));
-      const entries = Object.entries(STRATEGY_PROMPTS) as [VariantStrategy, string][];
+      const entries = Object.entries(strategyPrompts(DEFAULT_SCHEMA)) as [VariantStrategy, string][];
       const results = await Promise.allSettled(
         entries.map(async ([strategy, prompt]) => {
           const t0 = Date.now();
