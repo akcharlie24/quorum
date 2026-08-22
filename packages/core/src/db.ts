@@ -97,6 +97,16 @@ export function addVariant(targetId: number, collectorId: string, strategy: Vari
   );
 }
 
+/**
+ * Retires a target's current variants so a rebuilt Flock replaces them.
+ * Rows are kept, not deleted — past runs and heal history must stay readable.
+ */
+export function retireVariants(targetId: number): number {
+  return db
+    .prepare(`UPDATE variants SET status = 'retired' WHERE target_id = ? AND status = 'active'`)
+    .run(targetId).changes;
+}
+
 export function getVariants(targetId: number): VariantRecord[] {
   return db
     .prepare(`SELECT * FROM variants WHERE target_id = ? AND status = 'active'`)

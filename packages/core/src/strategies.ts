@@ -46,7 +46,8 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
     [
       `Listing page with many ${item}s.`,
       withExtra && extra ? extra : "",
-      `Return EVERY ${item} on the page as a separate JSON object, not just the first.`,
+      `Read ONLY this page. Do not follow links or open individual ${item} pages.`,
+      `Return a flat array: EVERY ${item} on this page as its own top-level JSON object, not just the first, and not nested inside another field.`,
       `Fields: ${fields}.`,
       `Use these exact field names. Each value must be a plain number or string, never a nested object. Use null if missing.`,
       STRATEGY_CLAUSE[strategy],

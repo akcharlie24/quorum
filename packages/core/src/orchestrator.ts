@@ -1,5 +1,5 @@
 import { createScraperDetached } from "./brightdata.js";
-import { addVariant, getTarget, upsertTarget } from "./db.js";
+import { addVariant, getTarget, retireVariants, upsertTarget } from "./db.js";
 import { appendJobLog, createJob, finishJob } from "./jobs.js";
 import { runCycle } from "./runner.js";
 import { STRATEGY_LABEL, strategyPrompts } from "./strategies.js";
@@ -9,12 +9,21 @@ import type { TargetSchema, VariantStrategy } from "./types.js";
  * Kick off Flock creation as a background job and return its id immediately —
  * `scraper create` takes 5-25 minutes per variant, far past any HTTP timeout.
  */
-export function startFlockJob(name: string, url: string, schema: TargetSchema): number {
+export function startFlockJob(
+  name: string,
+  url: string,
+  schema: TargetSchema,
+  opts: { replace?: boolean } = {}
+): number {
   const jobId = createJob("flock", name);
 
   void (async () => {
     try {
       const target = upsertTarget(name, url, schema);
+      if (opts.replace) {
+        const retired = retireVariants(target.id);
+        if (retired) appendJobLog(jobId, `Retired ${retired} previous scraper(s); rebuilding the Flock.`);
+      }
       const prompts = Object.entries(strategyPrompts(schema)) as [VariantStrategy, string][];
       appendJobLog(jobId, `Spinning up a Flock of ${prompts.length} scrapers for ${url}`);
 

@@ -70,6 +70,27 @@ test("a wrapped value and a bare value are treated as agreeing", () => {
   assert.ok(res.verdicts.every((v) => v.status === "healthy"));
 });
 
+test("rows nested in a container key are recovered", () => {
+  // shape a real IMDb collector returned: rows buried under `movies`, plus crawl metadata
+  const wrapped = [
+    {
+      movies: [
+        { title: "Seven", rating: 8.6 },
+        { title: "Forrest Gump", rating: 8.8 },
+      ],
+      product_page_url: "https://www.imdb.com/title/tt0120815/",
+      input: { url: "https://www.imdb.com/chart/top/" },
+    },
+  ];
+  const movieSchema: TargetSchema = {
+    keyField: "title",
+    fields: { title: "string", rating: "number" },
+  };
+  const rows = normalizeRows(wrapped, movieSchema);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows[0], { title: "Seven", rating: 8.6 });
+});
+
 test("normalizeRows maps aliased field names", () => {
   const rows = normalizeRows(
     [{ product_name: "X", Price: "$5.00", rating: "4.0", product_stock: "7 units" }],

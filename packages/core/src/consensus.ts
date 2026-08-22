@@ -44,21 +44,49 @@ export function coerce(raw: unknown, type: "string" | "number" | "integer"): unk
   return type === "integer" ? Math.round(n) : n;
 }
 
-export function normalizeRows(raw: unknown[], schema: TargetSchema): Row[] {
-  const rows: Row[] = [];
+/** Case-insensitive field lookup so "Price"/"price"/"product_price" all map to `price`. */
+function lookupField(src: Record<string, unknown>, field: string): unknown {
+  if (field in src) return src[field];
+  const lower = field.toLowerCase();
+  for (const k of Object.keys(src)) {
+    const kl = k.toLowerCase();
+    if (kl === lower || kl.endsWith(`_${lower}`) || kl === `product_${lower}`) return src[k];
+  }
+  return undefined;
+}
+
+/**
+ * Some generated scrapers wrap their rows inside a container key rather than
+ * returning a flat array (observed: `[{movies: [...], product_page_url, input}]`).
+ * When a top-level object carries none of the schema's fields but holds an array of
+ * objects that do, treat that inner array as the rows.
+ */
+export function flattenRows(raw: unknown[], schema: TargetSchema): Record<string, unknown>[] {
+  const fields = Object.keys(schema.fields);
+  const out: Record<string, unknown>[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const src = item as Record<string, unknown>;
-    // case-insensitive field lookup so "Price"/"price"/"product_price" variants still map
-    const lookup = (field: string): unknown => {
-      if (field in src) return src[field];
-      const lower = field.toLowerCase();
-      for (const k of Object.keys(src)) {
-        const kl = k.toLowerCase();
-        if (kl === lower || kl.endsWith(`_${lower}`) || kl === `product_${lower}`) return src[k];
-      }
-      return undefined;
-    };
+    if (fields.some((f) => lookupField(src, f) !== undefined)) {
+      out.push(src);
+      continue;
+    }
+    for (const value of Object.values(src)) {
+      if (!Array.isArray(value)) continue;
+      const nested = value.filter(
+        (x): x is Record<string, unknown> =>
+          !!x && typeof x === "object" && fields.some((f) => lookupField(x as Record<string, unknown>, f) !== undefined)
+      );
+      out.push(...nested);
+    }
+  }
+  return out;
+}
+
+export function normalizeRows(raw: unknown[], schema: TargetSchema): Row[] {
+  const rows: Row[] = [];
+  for (const src of flattenRows(raw, schema)) {
+    const lookup = (field: string): unknown => lookupField(src, field);
     const row: Row = {};
     for (const [field, type] of Object.entries(schema.fields)) {
       row[field] = coerce(lookup(field), type);

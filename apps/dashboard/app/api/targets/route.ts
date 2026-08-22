@@ -20,6 +20,7 @@ export async function POST(req: Request) {
     description?: string;
     keyField?: string;
     fields?: { name: string; type: FieldType }[];
+    replace?: boolean;
   };
 
   const name = body.name?.trim();
@@ -39,6 +40,6 @@ export async function POST(req: Request) {
     description: body.description?.trim() || undefined,
   };
 
-  const jobId = startFlockJob(name, url, schema);
+  const jobId = startFlockJob(name, url, schema, { replace: body.replace === true });
   return NextResponse.json({ jobId, name });
 }
