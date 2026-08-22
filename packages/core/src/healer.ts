@@ -18,13 +18,15 @@ export function composeHealPrompt(
   const example = consensusRows[0] ?? {};
   const exampleStr = fields.map((f) => `${f}=${JSON.stringify(example[f])}`).join(", ");
 
+  const item = target.schema.itemLabel?.trim() || "item";
   if (verdict.status === "broken") {
     return (
-      `The scraper stopped returning correct data for ${target.url}. ` +
-      `It must return one item per product card with fields: ${fields.join(", ")}. ` +
-      `Example of a correct item currently on the page: ${exampleStr}. ` +
-      `The page layout may have changed (renamed CSS classes or restructured markup); ` +
-      `update the extraction logic accordingly. Keep the exact same output field names.`
+      `The scraper returns empty or unusable results for ${target.url}. ` +
+      // Without an explicit count, fixes come back accurate but drastically incomplete
+      // (a 25-of-250 fix scored 100% precision and still had to be rejected).
+      `Read ONLY that page and return ALL ${consensusRows.length} ${item}s on it as a flat array, ` +
+      `one object each, not nested and not just the first few. Do not open individual ${item} pages. ` +
+      `Fields: ${fields.join(", ")}. Example of a correct item: ${exampleStr}.`
     );
   }
   const badFields = [...new Set(verdict.dissents.map((d) => d.split(".").pop()))];
