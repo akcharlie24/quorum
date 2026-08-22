@@ -5,7 +5,9 @@ import {
   getVariants,
   recordVariantResult,
   recordVote,
+  setHealVerification,
   startRun,
+  unverifiedHeals,
   type TargetRecord,
 } from "./db.ts";
 import { consensus, normalizeRows } from "./consensus.ts";
@@ -88,6 +90,21 @@ export async function runCycle(
   }
   finishRun(runId, res.rows);
   log(pc.dim(`  consensus dataset: ${res.rows.length} rows — pipeline output is clean`));
+
+  // An approved fix is only provisional. Bright Data's preview can look perfect while
+  // the deployed scraper still fails, so every approval must survive a real run.
+  for (const heal of unverifiedHeals(target.id)) {
+    const verdict = res.verdicts.find((v) => v.variantId === heal.variant_id);
+    if (!verdict || isInfrastructureFailure(verdict.error)) continue;
+    const strategy = variants.find((x) => x.id === heal.variant_id)?.strategy ?? String(heal.variant_id);
+    if (verdict.status === "healthy") {
+      setHealVerification(heal.id, "verified", `confirmed healthy on run #${runId}`);
+      log(pc.green(`  ✔ heal VERIFIED in production — ${strategy} healthy on run #${runId}`));
+    } else {
+      setHealVerification(heal.id, "regressed", `still ${verdict.status} on run #${runId}`);
+      log(pc.red(`  ✘ heal FAILED verification — ${strategy} still ${verdict.status} despite an approved fix`));
+    }
+  }
 
   // Heal every variant that lost the vote (serialize: BD rate-caps heals).
   let healed = 0;

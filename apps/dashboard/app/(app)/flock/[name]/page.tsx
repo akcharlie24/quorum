@@ -265,6 +265,19 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
                     </span>
                   </div>
                   {h.verdict_reason && <div className="heal-reason">{h.verdict_reason}</div>}
+                  {h.verdict === "approved" && (
+                    <div className="sub" style={{ marginTop: 4 }}>
+                      {h.verification === "verified" ? (
+                        <span style={{ color: "var(--green)" }}>✔ proven in production on a later run</span>
+                      ) : h.verification === "regressed" ? (
+                        <span style={{ color: "var(--red-soft)" }}>
+                          ✘ fix did not hold — scraper still failing after approval
+                        </span>
+                      ) : (
+                        <span className="faint">awaiting production verification…</span>
+                      )}
+                    </div>
+                  )}
                   <div className="heal-prompt">{h.prompt}</div>
                 </div>
               </div>

@@ -25,6 +25,8 @@ export interface HealView {
   prompt: string;
   verdict: string;
   verdict_reason: string | null;
+  /** null = awaiting a live run, "verified" = proven in production, "regressed" = fix did not hold */
+  verification: string | null;
   started_at: string;
   decided_at: string | null;
 }
@@ -158,7 +160,7 @@ export function getTargetDetail(name: string): TargetDetail | undefined {
 
   const heals = db
     .prepare(
-      `SELECT h.id, h.variant_id as variantId, v.strategy, h.prompt, h.verdict, h.verdict_reason, h.started_at, h.decided_at
+      `SELECT h.id, h.variant_id as variantId, v.strategy, h.prompt, h.verdict, h.verdict_reason, h.verification, h.started_at, h.decided_at
        FROM heal_events h JOIN variants v ON v.id = h.variant_id
        WHERE v.target_id = ? ORDER BY h.id DESC LIMIT 20`
     )

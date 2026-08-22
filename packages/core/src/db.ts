@@ -59,6 +59,14 @@ CREATE TABLE IF NOT EXISTS heal_events (
 );
 `);
 
+// An approved heal is provisional until the repaired scraper proves itself on a
+// real run: Bright Data's preview can look perfect while the deployed code still fails.
+try {
+  db.exec(`ALTER TABLE heal_events ADD COLUMN verification TEXT`);
+} catch {
+  /* column already present */
+}
+
 export interface TargetRecord {
   id: number;
   name: string;
@@ -171,6 +179,21 @@ export function decideHealEvent(
   db.prepare(
     `UPDATE heal_events SET verdict = ?, verdict_reason = ?, preview_json = ?, decided_at = datetime('now') WHERE id = ?`
   ).run(verdict, reason, JSON.stringify(preview), healId);
+}
+
+/** Approved heals that have not yet been confirmed against a live run. */
+export function unverifiedHeals(targetId: number): { id: number; variant_id: number }[] {
+  return db
+    .prepare(
+      `SELECT h.id, h.variant_id FROM heal_events h JOIN variants v ON v.id = h.variant_id
+       WHERE v.target_id = ? AND h.verdict = 'approved' AND h.verification IS NULL`
+    )
+    .all(targetId) as { id: number; variant_id: number }[];
+}
+
+export function setHealVerification(healId: number, status: "verified" | "regressed", note: string): void {
+  db.prepare(`UPDATE heal_events SET verification = ?, verdict_reason = verdict_reason || ' | ' || ? WHERE id = ?`)
+    .run(status, note, healId);
 }
 
 export function lastRuns(targetId: number, limit = 10) {
