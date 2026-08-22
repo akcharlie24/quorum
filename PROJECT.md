@@ -59,7 +59,7 @@ Every detection, breakage, and heal event is telemetry. Aggregated → a live "w
 ### 🔨 Phase 1 — The Flock, end to end (Layer 2) ← WE ARE HERE
 The demo-target site is part of this phase — Flock development *needs* a site we can break on purpose.
 
-- [x] **1a. Demo-target site** (`apps/demo-target`): "WebHead Gear" store, 8 products (name/price/rating/stock). Layouts: v1 clean · v2 redesign (renamed classes + restructured DOM) · v3 silent corruption (prices $0, stock 999). Mutate = edit `layout.config.json` + redeploy. ⏳ Vercel deploy pending `vercel login`.
+- [x] **1a. Breakage Lab** (`apps/demo-target`) — *not a demo prop, a measuring instrument.* "WebHead Gear" store, 8 products. Layouts: v1 clean · v2 redesign (renamed classes + restructured DOM) · v3 silent corruption (prices $0, stock 999). **Its job is the benchmark**: you cannot measure "1 scraper survives X% of layout changes, a Flock survives Y%" without a site whose mutations you control. Belongs on the Benchmarks page, NOT the demo's opening act. Mutate = edit `layout.config.json` + redeploy. ⏳ Vercel deploy pending `vercel login`.
 - [x] **1b. CLI wrapper** (`packages/core/src/brightdata.ts`): create/run/heal/approve via child process, defensive `--json` parsing, error taxonomy. ⚠️ JSON shapes unverified until first real calls.
 - [x] **1c. Flock generator**: `silk flock <url> <name>` — 3 parallel creates (css / text-anchor / structural prompts in `strategies.ts`), variants persisted in SQLite.
 - [x] **1d. Runner + consensus** (`runner.ts`, `consensus.ts`): parallel runs, normalization + coercion, field-level majority vote with numeric tolerance, verdicts (healthy/dissenting/broken), full telemetry. **7/7 unit tests pass.**
@@ -68,10 +68,19 @@ The demo-target site is part of this phase — Flock development *needs* a site 
 
 **Phase 1 exit criterion = the core demo works headless:** break demo site → variant fails vote → heal → consensus-approved → pipeline output never corrupted.
 
-### Phase 2 — Spider-Sense + Daily Bugle (Layers 1+3 — the easy ones, by design)
-- [ ] **2a. Drift engine**: per-field fingerprints (null rate, type, deviation vs last K runs) over the telemetry DB that Phase 1 already populates.
+### ✅ Phase 1.5 — Flock Control Room (dashboard) — BUILT
+Pulled forward from Phase 2: the product is a UI where you paste **any real URL** and watch a Flock work. Demo-target site is demoted to a benchmark instrument (see below).
+- [x] **Next.js dashboard** (`apps/dashboard`, port 3939), dark Spider-Man theme, three routes: `/` (spin up + Flock list), `/flock/[name]` (control room), `/how-it-works` (the consensus explainer — doubles as judge-facing documentation).
+- [x] **URL-in flow**: paste URL + name + field schema (name/type/key, presets for Products / Job posts / Articles) → Flock builds in the background.
+- [x] **Background job layer** (`jobs.ts`, `orchestrator.ts`): `scraper create` runs 5–25 min, far past any HTTP timeout, so creation and cycles run as jobs with live logs polled by the UI.
+- [x] **Control room**: variant cards (strategy + collector id + healthy/dissenting/broken), **consensus table with disputed cells highlighted inline** ("CSS variant said 0.00"), healing ledger (approved/rejected + match score + the actual prompt), run-history strip, Run cycle / Scrape only buttons.
+- [x] **Dynamic per-target schema** — arbitrary sites, not just the demo store.
+- [x] `seed-demo.ts` — populates a full breakage-and-heal story into the UI without burning Bright Data credits.
+
+### Phase 2 — Spider-Sense + Daily Bugle (Layers 1+3)
+- [ ] **2a. Drift engine**: per-field fingerprints (null rate, type, deviation vs last K runs) over the telemetry DB Phase 1 already populates.
 - [ ] **2b. Discord/Slack webhook alerts** with before/after diff (~1 hour).
-- [ ] **2c. Dashboard** (Next.js, Spider-Man theme): site health cards (green/amber/red), volatility leaderboard, live heal-event feed, drift sparklines, "Run now" via `/dca/trigger`, credits burn-down.
+- [ ] **2c. Daily Bugle page**: volatility leaderboard across all targets, MTTD/MTTH, credits burn-down.
 
 ### Phase 3 — Real target sites
 - [ ] Pick 2 real sites (see §5), generate their Flocks, let them run on a schedule so the dashboard shows real history.
@@ -108,13 +117,16 @@ Mutation types: class/id renames · DOM restructure · field removal · **silent
 | MTTD / MTTH (mean time to detect / heal) | The loop is fast |
 | Heal approval accuracy: consensus verdict vs manual judgment | Zero-human healing is safe |
 
-## 7. Demo Script (90 seconds — build toward THIS)
+## 7. Demo Script (~2 min — build toward THIS)
 
-1. Dashboard: all green, volatility leaderboard live, heal-event history visible. *(10s)*
-2. "Sites change. Watch." → deploy the DOM-restructure mutation of the demo site. *(10s)*
-3. Next run: one Flock variant breaks, survivors outvote it — **pipeline never returned bad data**. Spider-Sense flags it; Discord alert pops. *(25s)*
-4. Heal fires → Bright Data returns the fix preview → SILK compares to consensus → **approved programmatically, no human**. Dashboard green. *(25s)*
-5. Benchmarks: single vs Flock survival, silent-failure detection rate. *(20s)*
+Lead with the **real product on a real site**. The Breakage Lab appears only as evidence, at the end.
+
+1. **Real URL, live.** Paste a real target URL into SILK, pick the fields, hit *Spin up Flock*. Three scrapers start building on Bright Data. *(15s)*
+   → Because creation takes 5–25 min, have a **pre-built Flock on the same real site** ready to switch to. Never wait on stage.
+2. **The control room.** Pre-built Flock: three variants green, consensus table of real scraped data, run history. "One URL, three scrapers, three different extraction philosophies." *(25s)*
+3. **Silent corruption is the real enemy.** Show a disputed cell inline: consensus says 129.99, the CSS variant said 0.00 — *a single scraper would have shipped that zero and never raised an error.* This is the moment that sells the product. *(25s)*
+4. **Verified healing.** Healing ledger: Bright Data proposed a fix → SILK scored the preview against consensus → first attempt **rejected at 62%**, retry **approved at 100%**, no human. "We don't use `--auto-approve`. Our consensus IS the approval." *(30s)*
+5. **Proof, not vibes.** Benchmarks page from the Breakage Lab: single scraper vs Flock survival per mutation type, silent-corruption detection rate, MTTH. *(25s)*
 
 ## 8. Prize Track Mapping
 
@@ -139,4 +151,6 @@ Mutation types: class/id renames · DOM restructure · field removal · **silent
 
 - **2026-08-22 (am):** Idea locked (Flock + Spider-Sense + Volatility Index = SILK). PROJECT.md created.
 - **2026-08-22 (pm):** Verified real BD CLI surface from docs — `scraper create/run/heal/approve` with approval gate + `--reject`; SILK's consensus becomes the programmatic approval brain (stronger than planned!). Build order flipped per Akshat: **Flock (Layer 2) first**, incl. demo-target site; Spider-Sense + Bugle after. Waiting on: BD API token to start `scraper create` bakes.
-- **2026-08-22 (later):** API key in `.env` ✅; `bdata` CLI v0.3.5 installed, auth confirmed via `zones` (budget endpoint needs admin scope — harmless). **Entire Phase 1 core built and committed**: demo site (3 layouts), BD wrapper, telemetry DB, consensus (7/7 tests), heal-approve loop, `silk` CLI. **Blocked on one user action: `vercel login`** → then deploy demo site → fire `silk flock` (3 × 5–25 min bake) → Step 8 rehearsal.
+- **2026-08-22 (later):** API key in `.env` ✅; `bdata` CLI v0.3.5 installed, auth confirmed via `zones` (budget endpoint needs admin scope — harmless). **Entire Phase 1 core built and committed**: demo site (3 layouts), BD wrapper, telemetry DB, consensus (7/7 tests), heal-approve loop, `silk` CLI.
+- **2026-08-22 (evening):** Akshat: *"a demo website with html is childish — I need a real product UI where I paste any URL."* Correct. **Dashboard pulled forward and built** (Phase 1.5): paste-a-URL → Flock builds in background → control room with consensus table, inline disputed cells, healing ledger, run history. Demo-target site **reframed as the Breakage Lab** — a measuring instrument for benchmarks, not the demo's opener. Demo script rewritten to lead with a real site. Verified end-to-end against seeded data; typechecks clean.
+  - ⚠️ **Account state**: `bdata zones` returns `[]` and `bdata scrape` fails with "No Web Unlocker zone specified" — the account has no zones provisioned. Testing whether `scraper create` auto-provisions (in flight).
