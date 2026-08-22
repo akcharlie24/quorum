@@ -147,6 +147,48 @@ Lead with the **real product on a real site**. The Breakage Lab appears only as 
 - **429 rate caps on heal** → CLI has built-in retry (`--max-retries`); serialize heals per collector.
 - **Docs vs kickoff-blog drift** (blog says `bdata`, docs say `brightdata` — verified: both work, same binary).
 
+## 10a. PROVEN ON LIVE DATA (IMDb Top 250, 2026-08-22/23)
+
+**The Flock works.** Two independently generated scrapers (structural, text-anchor) each extract the full
+**250-movie chart with correct ratings** — Shawshank 9.3, Godfather 9.2, Dark Knight 9.1 — verified against
+the real chart. Consensus emits 250 clean rows. **The pipeline never emitted bad data at any point tonight.**
+
+**The silent failure is real and unstaged.** The `css` variant returns ~12,000 rows, correct ratings, valid
+JSON, exit code 0, no error — and **every title blank**. A single-scraper pipeline ingests that as success.
+Two other scrapers supplied real titles and outvoted it. This is the product thesis, caught in the wild.
+
+**Coverage is capped by the second-best scraper, by design.** A row needs 2 independent confirmations, so
+when one variant saw 250 and another 75, we emitted 75. Consensus is precision-first: it would rather emit
+fewer rows that two scrapers confirmed than more rows resting on one unverified source.
+
+### The headline finding: Bright Data's heal previews do not reflect deployed behaviour
+Twice, on two different collectors, `scraper heal` returned `awaiting_approval` with a preview showing
+**100% correct rows** — and the approved, deployed scraper still failed. Our three-stage check caught it:
+
+| stage | what it checks | outcome |
+|---|---|---|
+| 1. Consensus vote | do independent scrapers agree? | caught the blank-title failure |
+| 2. Preview scoring | is the proposed fix accurate + plausibly complete? | 4 rejections, 2 approvals |
+| 3. Production verification | does the deployed scraper actually work? | **caught an approved fix that didn't** |
+
+**This validates the whole project: you cannot trust a self-healing system's own report that it healed.**
+
+Live heal ledger (real audit trail, all programmatic, no human):
+- `#6 rejected` — preview claims only 25 of ~250 rows
+- `#7 rejected` — preview claims only 2 of ~75 rows
+- `#9 rejected` — preview contained no usable rows
+- `#10 rejected` — preview claims only 2 of ~250 rows
+- `#11 approved` at 100% precision, claims 250 → **`regressed`: still broken on run #23**
+
+### Additional platform findings (all learned by running it)
+1. **Descriptions cap at ~500 chars**, undocumented — longer gives instant `400 Invalid description` and leaves a half-built collector (no programmatic delete).
+2. **AI-Flow caps generation at 3 concurrent builds** account-wide (`Cannot run more than 3 jobs in parallel`). One Flock at a time; 15 at once destroyed a whole round.
+3. **Generated scrapers crawl to detail pages by default** unless explicitly forbidden — returns recommendation carousels, not the listing.
+4. **Values come back structured** (`{value, currency, symbol}`), and rows arrive nested under a container key.
+5. **Heal previews are truncated inconsistently** — sometimes `"N more items"`, often silently. Unmeasurable cardinality must be treated as unknown, not insufficient.
+6. **The CLI drives generation; it does not merely poll.** Killing it after the trigger leaves an empty collector that 403s at run time.
+7. **Build times**: ~6.4 min alone vs ~24.5 min with nine queued.
+
 ## 11. Status Log
 
 - **2026-08-23 (later):** UI follow-ups plus a stack upgrade, still on `ui-tweaks`.
