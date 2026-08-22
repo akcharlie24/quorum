@@ -102,10 +102,20 @@ export async function createScraper(
   return { collectorId, raw: res };
 }
 
-export function createScraperDetached(
+/**
+ * Builds a scraper, reporting the collector id early via `onAccepted` but waiting for
+ * generation to finish before resolving.
+ *
+ * Do NOT be tempted to kill the CLI once the id appears: it drives the generation
+ * pipeline step by step rather than merely polling it. Detaching leaves an empty
+ * collector that fails at run time with 403 "Collector does not have a template".
+ * The process must stay alive for the full 10-25 minutes.
+ */
+export function createScraperAwaited(
   url: string,
   description: string,
-  acceptTimeoutMs = 900_000,
+  onAccepted?: (collectorId: string) => void,
+  timeoutMs = 40 * 60_000
 ): Promise<{ collectorId: string }> {
   const desc = sanitizePrompt(description).slice(0, MAX_DESCRIPTION);
   return new Promise((resolve, reject) => {
@@ -114,69 +124,42 @@ export function createScraperDetached(
     });
     let out = "";
     let settled = false;
-    let graceTimer: NodeJS.Timeout | undefined;
+    let announced = false;
 
     const finish = (err: Error | null, collectorId?: string) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      clearTimeout(graceTimer);
-      try {
-        child.kill("SIGKILL");
-      } catch {
-        /* already gone */
-      }
+      try { child.kill("SIGKILL"); } catch { /* already gone */ }
       if (err) reject(err);
       else resolve({ collectorId: collectorId! });
     };
 
     const failed = () =>
-      /Invalid description|ai_trigger_failed|Failed to start AI generation/.test(
-        out,
-      );
+      /Invalid description|ai_trigger_failed|Failed to start AI generation|does not have a template/.test(out);
 
-    const onData = (chunk: Buffer) => {
+    child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString();
-      if (failed())
-        return finish(
-          new Error(`Bright Data rejected the build: ${out.slice(-300)}`),
-        );
-
-      const id = out.match(COLLECTOR_RE)?.[0];
-      if (!id) return;
-
-      // Polling means generation is definitely under way server-side.
-      if (/polling \(attempt|Step:/.test(out)) return finish(null, id);
-
-      // Under load the first poll line can lag well behind the trigger, so accept a
-      // clean "Triggering AI generation" that has not failed after a short grace period.
-      if (/Triggering AI generation/.test(out) && !graceTimer) {
-        graceTimer = setTimeout(() => {
-          if (failed())
-            finish(
-              new Error(`Bright Data rejected the build: ${out.slice(-300)}`),
-            );
-          else finish(null, id);
-        }, 30_000);
+      if (!announced) {
+        const id = out.match(COLLECTOR_RE)?.[0];
+        if (id) {
+          announced = true;
+          onAccepted?.(id);
+        }
       }
-    };
-
-    child.stdout.on("data", onData);
-    child.stderr.on("data", onData);
+    });
+    child.stderr.on("data", (chunk: Buffer) => { out += chunk.toString(); });
     child.on("error", (e) => finish(e));
+
     child.on("close", () => {
       const id = out.match(COLLECTOR_RE)?.[0];
-      if (id && !failed()) finish(null, id);
-      else finish(new Error(`build not accepted: ${out.slice(-300)}`));
+      // "status":"done" is the only signal that generation actually completed.
+      const done = /"status"\s*:\s*"done"/.test(out);
+      if (id && done && !failed()) return finish(null, id);
+      finish(new Error(`build did not complete: ${out.replace(/.*polling \(attempt[^\n]*\n/gs, "").slice(-300)}`));
     });
 
-    const timer = setTimeout(
-      () =>
-        finish(
-          new Error("timed out waiting for Bright Data to accept the build"),
-        ),
-      acceptTimeoutMs,
-    );
+    const timer = setTimeout(() => finish(new Error("scraper build timed out")), timeoutMs);
   });
 }
 

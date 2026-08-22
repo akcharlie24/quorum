@@ -1,9 +1,9 @@
-import { createScraperDetached } from "./brightdata.ts";
-import { addVariant, getTarget, getVariants, retireVariants, upsertTarget } from "./db.ts";
-import { appendJobLog, createJob, finishJob } from "./jobs.ts";
-import { runCycle } from "./runner.ts";
-import { STRATEGY_LABEL, strategyPrompts } from "./strategies.ts";
-import type { TargetSchema, VariantStrategy } from "./types.ts";
+import { createScraperAwaited } from "./brightdata.js";
+import { addVariant, getTarget, getVariants, retireVariants, upsertTarget } from "./db.js";
+import { appendJobLog, createJob, finishJob } from "./jobs.js";
+import { runCycle } from "./runner.js";
+import { STRATEGY_LABEL, strategyPrompts } from "./strategies.js";
+import type { TargetSchema, VariantStrategy } from "./types.js";
 
 /**
  * Kick off Flock creation as a background job and return its id immediately —
@@ -38,17 +38,22 @@ export function startFlockJob(
         appendJobLog(jobId, `${existing.size} scraper(s) already present; building the missing ${prompts.length}.`);
       }
       appendJobLog(jobId, `Spinning up ${prompts.length} scraper(s) for ${url}`);
+      appendJobLog(jobId, `Bright Data generates each one with AI — 10-25 min. Stay online; the build aborts if this process dies.`);
 
-      // Detached: we record each collector id the moment Bright Data accepts the build,
-      // then let it generate server-side. Nothing here depends on staying connected.
-      // Staggered, because simultaneous submissions queue up behind each other.
+      // The CLI drives generation rather than merely polling it, so each call must run
+      // to completion. Variants build concurrently; only the id is reported early.
       const results = await Promise.allSettled(
-        prompts.map(async ([strategy, prompt], i) => {
-          await new Promise((r) => setTimeout(r, i * 20_000));
-          appendJobLog(jobId, `→ ${STRATEGY_LABEL[strategy]} variant: submitting…`);
-          const { collectorId } = await createScraperDetached(url, prompt);
+        prompts.map(async ([strategy, prompt]) => {
+          const t0 = Date.now();
+          appendJobLog(jobId, `→ ${STRATEGY_LABEL[strategy]} variant: building…`);
+          const { collectorId } = await createScraperAwaited(url, prompt, (id) =>
+            appendJobLog(jobId, `   ${STRATEGY_LABEL[strategy]} collector ${id} accepted, generating…`)
+          );
           addVariant(target.id, collectorId, strategy);
-          appendJobLog(jobId, `✔ ${STRATEGY_LABEL[strategy]} accepted — ${collectorId} (building on Bright Data)`);
+          appendJobLog(
+            jobId,
+            `✔ ${STRATEGY_LABEL[strategy]} READY — ${collectorId} (${((Date.now() - t0) / 60000).toFixed(1)} min)`
+          );
           return collectorId;
         })
       );
@@ -59,8 +64,7 @@ export function startFlockJob(
       }
       appendJobLog(
         jobId,
-        `${ok}/${prompts.length} scrapers accepted. Bright Data is generating them now (~10-25 min); ` +
-          `run a cycle once they finish to bring the Flock online.`
+        `Flock ready: ${ok}/${prompts.length} scrapers built and usable.`
       );
       if (ok === 0) finishJob(jobId, "error", "no scrapers could be created");
       else finishJob(jobId, "done");
