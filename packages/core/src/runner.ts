@@ -39,7 +39,10 @@ export async function runCycle(
         if (!raw.ok) {
           // Keep the CLI's own words alongside our category — the category alone is
           // useless when diagnosing a live target.
-          const detail = (raw.stderr || raw.stdout).replace(/Polling batch[^\n]*\n?/g, "").trim();
+          const detail = (raw.stderr || raw.stdout)
+            .replace(/^.*Polling[^\n]*\n?/gm, "")
+            .replace(/^\s*Step:[^\n]*\n?/gm, "")
+            .trim();
           return {
             variant: v,
             rows: [],
