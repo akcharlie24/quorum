@@ -32,7 +32,11 @@ test("prompts stay inside Bright Data's undocumented description limit", () => {
   const p = strategyPrompts({ keyField: "name", fields: { name: "string" }, itemLabel: "item" });
   assert.notEqual(p.css, p["text-anchor"]);
   assert.notEqual(p.css, p.structural);
-  assert.ok(p["text-anchor"].includes("Do not use CSS"));
+  assert.notEqual(p["text-anchor"], p.structural);
+  // each must steer at its own signal, or the Flock is one scraper run three times
+  assert.match(p.css, /class names and element IDs/);
+  assert.match(p["text-anchor"], /visible text labels/);
+  assert.match(p.structural, /DOM structure/);
 });
 
 test("sanitizePrompt flattens smart punctuation to ASCII", () => {

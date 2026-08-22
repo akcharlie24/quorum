@@ -21,8 +21,10 @@ export const STRATEGY_BLURB: Record<VariantStrategy, string> = {
 
 const STRATEGY_CLAUSE: Record<VariantStrategy, string> = {
   css: "Locate values using CSS class names and element IDs.",
+  // An outright ban on class selectors made Bright Data's generator fail outright
+  // ("AI generation finished with status error"), so this steers rather than forbids.
   "text-anchor":
-    "Do not use CSS class names or IDs; locate values by nearby visible text labels and value patterns.",
+    "Prefer locating values by visible text labels and value patterns (currency amounts, labelled fields) rather than by class names.",
   structural:
     "Locate values by DOM structure and child order within repeated containers, not by class names.",
 };
