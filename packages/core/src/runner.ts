@@ -52,7 +52,17 @@ export async function runCycle(
         if (rows.length === 0) {
           return { variant: v, rows: [], error: "empty: scraper returned no rows" };
         }
-        return { variant: v, rows: normalizeRows(rows, target.schema), error: undefined };
+        const normalized = normalizeRows(rows, target.schema);
+        if (normalized.length === 0) {
+          // Data came back but none of it matched the schema — a shape mismatch, not a
+          // dead scraper. Keep a sample so the cause is visible instead of silent.
+          return {
+            variant: v,
+            rows: [],
+            error: `schema-mismatch: ${rows.length} raw row(s), no schema fields found. Sample: ${JSON.stringify(rows[0]).slice(0, 300)}`,
+          };
+        }
+        return { variant: v, rows: normalized, error: undefined };
       } catch (e) {
         return { variant: v, rows: [], error: String(e).slice(0, 500) };
       }
