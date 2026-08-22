@@ -110,13 +110,25 @@ export async function healAndDecide(
     const heal = await healScraper(variant.collector_id, sanitizePrompt(prompt));
     const s = scorePreview(heal.preview, consensusRows, target, heal.truncatedCount);
     const pct = (s.precision * 100).toFixed(1);
-    // A truncated preview must still claim enough rows to be a plausible fix.
-    const enoughRows = s.claimedRows >= Math.max(1, consensusRows.length * CARDINALITY_FLOOR);
+    const floor = Math.max(1, consensusRows.length * CARDINALITY_FLOOR);
+
+    // Previews are truncated inconsistently: sometimes with an "N more items" marker,
+    // sometimes silently. A tiny sample with no marker means cardinality is UNKNOWN,
+    // not insufficient — and refusing every such fix means never repairing anything.
+    // For a variant that is already broken there is nothing to lose by deploying a
+    // precise-looking fix, because production verification is the real gate.
+    const cardinalityUnknown = heal.truncatedCount === 0 && s.sampleRows < floor;
+    const enoughRows =
+      s.claimedRows >= floor || (cardinalityUnknown && verdict.status === "broken");
     log(
       pc.dim(
         `    heal status=${heal.status} sample=${s.sampleRows} claimed=${s.claimedRows}/${consensusRows.length} precision=${pct}%`
       )
     );
+
+    if (cardinalityUnknown && verdict.status === "broken" && s.sampleRows > 0) {
+      log(pc.dim(`    cardinality unknown (untruncated ${s.sampleRows}-row sample); variant already broken, so production will decide`));
+    }
 
     if (s.sampleRows > 0 && s.precision >= APPROVE_THRESHOLD && enoughRows) {
       const res = await approveHeal(variant.collector_id);
@@ -125,7 +137,8 @@ export async function healAndDecide(
         healId,
         ok ? "approved" : "needs_human",
         ok
-          ? `preview matched consensus at ${pct}% across ${s.sampleRows} sampled rows (claims ${s.claimedRows})`
+          ? `preview matched consensus at ${pct}% across ${s.sampleRows} sampled rows` +
+            (cardinalityUnknown ? " (row count unverifiable; pending production check)" : ` (claims ${s.claimedRows})`)
           : `approve command failed: ${res.stderr.slice(0, 300)}`,
         heal.preview
       );
