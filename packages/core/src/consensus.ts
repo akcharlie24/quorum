@@ -8,8 +8,32 @@ import type {
 
 const NUM_TOLERANCE = 0.011; // price cents tolerance
 
+/**
+ * Bright Data often returns structured values rather than scalars — a price arrives as
+ * {value: 51.77, currency: "GBP", symbol: "£"}. Different variants wrap values differently,
+ * so unwrapping to the underlying scalar is what makes them comparable at all.
+ */
+const SCALAR_KEYS = ["value", "amount", "price", "text", "name", "title", "raw", "content"];
+
+export function unwrapScalar(value: unknown): unknown {
+  if (Array.isArray(value)) return value.length ? unwrapScalar(value[0]) : null;
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    for (const k of SCALAR_KEYS) {
+      const v = obj[k];
+      if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
+    }
+    for (const v of Object.values(obj)) {
+      if (typeof v === "number" || typeof v === "string") return v;
+    }
+    return null;
+  }
+  return value;
+}
+
 /** Coerce a raw scraped value to the schema type. "$129.99" -> 129.99, "In stock: 12" -> 12. */
-export function coerce(value: unknown, type: "string" | "number" | "integer"): unknown {
+export function coerce(raw: unknown, type: "string" | "number" | "integer"): unknown {
+  const value = unwrapScalar(raw);
   if (value === null || value === undefined) return null;
   if (type === "string") return String(value).trim();
   const s = String(value).replace(/,/g, "");

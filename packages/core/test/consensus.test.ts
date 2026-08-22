@@ -21,6 +21,29 @@ test("coerce strips currency and labels", () => {
   assert.equal(coerce(undefined, "number"), null);
 });
 
+test("coerce unwraps Bright Data's structured values", () => {
+  // real shape observed from a live collector: price arrives as an object
+  assert.equal(coerce({ value: 51.77, currency: "GBP", symbol: "£" }, "number"), 51.77);
+  assert.equal(coerce({ text: "In stock (22 available)" }, "integer"), 22);
+  assert.equal(coerce({ currency: "GBP" }, "string"), "GBP");
+  assert.equal(coerce([{ value: 9.5 }], "number"), 9.5);
+  assert.equal(coerce({}, "number"), null);
+});
+
+test("a wrapped value and a bare value are treated as agreeing", () => {
+  const wrapped = [{ name: "Widget", price: { value: 10, currency: "USD" }, rating: 4, stock: 2 }];
+  const bare = [{ name: "Widget", price: 10, rating: 4, stock: 2 }];
+  const res = consensus(
+    [
+      { variantId: 1, rows: normalizeRows(wrapped, schema) },
+      { variantId: 2, rows: normalizeRows(bare, schema) },
+      { variantId: 3, rows: normalizeRows(bare, schema) },
+    ],
+    schema
+  );
+  assert.ok(res.verdicts.every((v) => v.status === "healthy"));
+});
+
 test("normalizeRows maps aliased field names", () => {
   const rows = normalizeRows(
     [{ product_name: "X", Price: "$5.00", rating: "4.0", product_stock: "7 units" }],

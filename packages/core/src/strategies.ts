@@ -25,9 +25,12 @@ function schemaClause(schema: TargetSchema): string {
     .join(", ");
   const extra = schema.description?.trim() ? ` ${schema.description.trim()}` : "";
   return (
-    `Extract every ${item} listed on the page.${extra} ` +
-    `Return one JSON object per ${item} with exactly these fields: ${fields}. ` +
-    `Use these exact field names. If a value is missing, return null for it. `
+    `This is a LISTING page containing MANY ${item}s.${extra} ` +
+    `Return an array with EVERY ${item} visible on the page — typically 10 to 100 of them — ` +
+    `as one JSON object each. Do NOT return only the first ${item}; a result with a single ${item} is wrong. ` +
+    `Each object must have exactly these fields: ${fields}. ` +
+    `Use these exact field names, and return each value as a plain scalar (a bare number or string), ` +
+    `not as a nested object. If a value is missing, return null for it. `
   );
 }
 
