@@ -1,5 +1,5 @@
 import { createScraperDetached } from "./brightdata.js";
-import { addVariant, getTarget, retireVariants, upsertTarget } from "./db.js";
+import { addVariant, getTarget, getVariants, retireVariants, upsertTarget } from "./db.js";
 import { appendJobLog, createJob, finishJob } from "./jobs.js";
 import { runCycle } from "./runner.js";
 import { STRATEGY_LABEL, strategyPrompts } from "./strategies.js";
@@ -24,13 +24,27 @@ export function startFlockJob(
         const retired = retireVariants(target.id);
         if (retired) appendJobLog(jobId, `Retired ${retired} previous scraper(s); rebuilding the Flock.`);
       }
-      const prompts = Object.entries(strategyPrompts(schema)) as [VariantStrategy, string][];
-      appendJobLog(jobId, `Spinning up a Flock of ${prompts.length} scrapers for ${url}`);
+      const all = Object.entries(strategyPrompts(schema)) as [VariantStrategy, string][];
+
+      // Only build strategies this target is missing, so a retry tops the Flock up
+      // instead of discarding scrapers that already succeeded.
+      const existing = new Set(getVariants(target.id).map((v) => v.strategy));
+      const prompts = all.filter(([strategy]) => !existing.has(strategy));
+      if (prompts.length === 0) {
+        appendJobLog(jobId, `Flock already complete (${all.length} scrapers). Nothing to build.`);
+        return finishJob(jobId, "done");
+      }
+      if (existing.size > 0) {
+        appendJobLog(jobId, `${existing.size} scraper(s) already present; building the missing ${prompts.length}.`);
+      }
+      appendJobLog(jobId, `Spinning up ${prompts.length} scraper(s) for ${url}`);
 
       // Detached: we record each collector id the moment Bright Data accepts the build,
       // then let it generate server-side. Nothing here depends on staying connected.
+      // Staggered, because simultaneous submissions queue up behind each other.
       const results = await Promise.allSettled(
-        prompts.map(async ([strategy, prompt]) => {
+        prompts.map(async ([strategy, prompt], i) => {
+          await new Promise((r) => setTimeout(r, i * 20_000));
           appendJobLog(jobId, `→ ${STRATEGY_LABEL[strategy]} variant: submitting…`);
           const { collectorId } = await createScraperDetached(url, prompt);
           addVariant(target.id, collectorId, strategy);
