@@ -167,7 +167,9 @@ export function createScraperAwaited(
 export async function runScraper(
   collectorId: string,
   url?: string,
-  timeoutMs = 10 * 60_000,
+  // Real listing scrapes have taken well past 10 minutes (IMDb Top 250 among them);
+  // a short timeout kills a working scrape and records it as a breakage.
+  timeoutMs = 30 * 60_000
 ): Promise<{ rows: unknown[]; raw: CliResult }> {
   const dir = mkdtempSync(join(tmpdir(), "silk-run-"));
   const outFile = join(dir, "out.json");
