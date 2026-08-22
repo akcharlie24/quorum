@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { coerce, consensus, normalizeRows } from "../src/consensus.js";
 import { scorePreview } from "../src/healer.js";
 import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.js";
-import { extractTruncatedCount, sanitizePrompt } from "../src/brightdata.js";
+import { classifyError, extractTruncatedCount, isInfrastructureFailure, sanitizePrompt } from "../src/brightdata.js";
 import type { TargetSchema } from "../src/types.js";
 
 const schema: TargetSchema = {
@@ -187,4 +187,17 @@ test("scorePreview handles Bright Data's truncated previews", () => {
   const s2 = scorePreview(stingy, consensusRows, target, extractTruncatedCount(stingy));
   assert.equal(s2.precision, 1);
   assert.ok(s2.claimedRows < consensusRows.length * 0.5, "1 of 250 must fail the cardinality floor");
+});
+
+test("network failures are never treated as scraper breakage", () => {
+  const netFail = {
+    ok: false, exitCode: 1, json: null, stdout: "Triggering scrape...\nWaiting for results...\n",
+    stderr: "fetch failed (response_id d2t178741961)",
+  };
+  assert.equal(classifyError(netFail), "network");
+  assert.ok(isInfrastructureFailure("network: fetch failed"));
+  assert.ok(isInfrastructureFailure("rate_limited: 429"));
+  // a genuine extraction fault must still be healable
+  assert.ok(!isInfrastructureFailure("schema-mismatch: 250 raw row(s)"));
+  assert.ok(!isInfrastructureFailure("empty: scraper returned no rows"));
 });

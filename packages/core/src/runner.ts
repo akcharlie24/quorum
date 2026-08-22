@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { classifyError, runScraper } from "./brightdata.ts";
+import { classifyError, isInfrastructureFailure, runScraper } from "./brightdata.js";
 import {
   finishRun,
   getVariants,
@@ -94,6 +94,10 @@ export async function runCycle(
   if (opts.heal) {
     for (const v of res.verdicts) {
       if (v.status === "healthy") continue;
+      if (isInfrastructureFailure(v.error)) {
+        log(pc.dim(`  ↷ ${variants.find((x) => x.id === v.variantId)!.strategy}: our connection failed, not the scraper — no heal`));
+        continue;
+      }
       if (res.rows.length === 0) {
         log(pc.red("  no consensus available (too many variants down) — skipping heal, needs_human"));
         break;

@@ -12,7 +12,7 @@ export interface CliResult {
   exitCode: number;
 }
 
-export type BdError = "broken" | "empty" | "timeout" | "rate_limited";
+export type BdError = "broken" | "empty" | "timeout" | "rate_limited" | "network";
 
 function extractJson(text: string): unknown | null {
   // CLI mixes progress lines with JSON; grab the last {...} or [...] block.
@@ -62,10 +62,27 @@ export function runCli(
 
 export function classifyError(res: CliResult): BdError {
   const text = (res.stdout + res.stderr).toLowerCase();
-  if (text.includes("429") || text.includes("rate limit"))
-    return "rate_limited";
+  if (text.includes("429") || text.includes("rate limit")) return "rate_limited";
+  // Our own connectivity failing is not the scraper's fault — healing it would be
+  // both wasteful and dangerous, since a healthy scraper could be "fixed" into a
+  // broken one on the strength of an outage.
+  if (
+    text.includes("fetch failed") ||
+    text.includes("econnreset") ||
+    text.includes("enotfound") ||
+    text.includes("econnrefused") ||
+    text.includes("socket hang up") ||
+    text.includes("network")
+  ) {
+    return "network";
+  }
   if (text.includes("timed out") || text.includes("timeout")) return "timeout";
   return "broken";
+}
+
+/** Failures caused by our side of the wire, which must never trigger a heal. */
+export function isInfrastructureFailure(error: string | undefined): boolean {
+  return !!error && (error.startsWith("network") || error.startsWith("rate_limited"));
 }
 
 const COLLECTOR_RE = /c_[a-z0-9]{6,}/i;
