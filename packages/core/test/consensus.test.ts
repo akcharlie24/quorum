@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { coerce, consensus, normalizeRows } from "../src/consensus.js";
 import { previewMatchScore } from "../src/healer.js";
+import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.js";
+import { sanitizePrompt } from "../src/brightdata.js";
 import type { TargetSchema } from "../src/types.js";
 
 const schema: TargetSchema = {
@@ -13,6 +15,30 @@ const good = [
   { name: "Web-Shooter Mk II", price: 129.99, rating: 4.8, stock: 12 },
   { name: "Utility Belt Pro", price: 59.0, rating: 4.2, stock: 34 },
 ];
+
+test("prompts stay inside Bright Data's undocumented description limit", () => {
+  const fat: TargetSchema = {
+    keyField: "name",
+    fields: Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [`some_rather_long_field_name_${i}`, "string" as const])
+    ),
+    itemLabel: "product listing entry",
+    description: "x".repeat(400),
+  };
+  for (const [strategy, prompt] of Object.entries(strategyPrompts(fat))) {
+    assert.ok(prompt.length <= MAX_DESCRIPTION, `${strategy} prompt too long: ${prompt.length}`);
+  }
+  // the three must still differ, or the Flock is just one scraper three times
+  const p = strategyPrompts({ keyField: "name", fields: { name: "string" }, itemLabel: "item" });
+  assert.notEqual(p.css, p["text-anchor"]);
+  assert.notEqual(p.css, p.structural);
+  assert.ok(p["text-anchor"].includes("Do not use CSS"));
+});
+
+test("sanitizePrompt flattens smart punctuation to ASCII", () => {
+  assert.equal(sanitizePrompt("price — the “best” value…"), 'price - the "best" value...');
+  assert.ok(!/[^\x20-\x7E]/.test(sanitizePrompt("£51.77 · née")));
+});
 
 test("coerce strips currency and labels", () => {
   assert.equal(coerce("$129.99", "number"), 129.99);

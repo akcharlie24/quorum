@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { MAX_DESCRIPTION } from "./strategies.js";
 import { readFileSync, unlinkSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -81,7 +82,8 @@ export async function createScraper(
   description: string,
   timeoutMs = 30 * 60_000
 ): Promise<{ collectorId: string; raw: CliResult }> {
-  const res = await runCli(["scraper", "create", url, sanitizePrompt(description), "--json"], timeoutMs);
+  const desc = sanitizePrompt(description).slice(0, MAX_DESCRIPTION);
+  const res = await runCli(["scraper", "create", url, desc, "--json"], timeoutMs);
   const fromJson = JSON.stringify(res.json ?? "").match(COLLECTOR_RE)?.[0];
   const fromText = (res.stdout + res.stderr).match(COLLECTOR_RE)?.[0];
   const collectorId = fromJson ?? fromText ?? "";

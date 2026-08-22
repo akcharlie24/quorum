@@ -1,5 +1,12 @@
 import type { TargetSchema, VariantStrategy } from "./types.js";
 
+/**
+ * Bright Data rejects `scraper create` with 400 "Invalid description" past roughly this
+ * length. Undocumented — established by probing: 500 accepted, 560 rejected.
+ * Prompts are built to fit inside it, trimming the user's optional instruction first.
+ */
+export const MAX_DESCRIPTION = 500;
+
 export const STRATEGY_LABEL: Record<VariantStrategy, string> = {
   css: "CSS selectors",
   "text-anchor": "Text anchors",
@@ -12,26 +19,18 @@ export const STRATEGY_BLURB: Record<VariantStrategy, string> = {
   structural: "Navigates by DOM shape and position — survives renames, breaks on reordering.",
 };
 
-function schemaClause(schema: TargetSchema): string {
-  const item = schema.itemLabel?.trim() || "item";
-  const fields = Object.entries(schema.fields)
-    .map(([name, type]) =>
-      type === "number"
-        ? `${name} (number, digits only, no currency symbols or units)`
-        : type === "integer"
-          ? `${name} (integer, digits only)`
-          : `${name} (string)`
-    )
+const STRATEGY_CLAUSE: Record<VariantStrategy, string> = {
+  css: "Locate values using CSS class names and element IDs.",
+  "text-anchor":
+    "Do not use CSS class names or IDs; locate values by nearby visible text labels and value patterns.",
+  structural:
+    "Locate values by DOM structure and child order within repeated containers, not by class names.",
+};
+
+function fieldList(schema: TargetSchema): string {
+  return Object.entries(schema.fields)
+    .map(([name, type]) => `${name} (${type === "integer" ? "integer" : type})`)
     .join(", ");
-  const extra = schema.description?.trim() ? ` ${schema.description.trim()}` : "";
-  return (
-    `This is a LISTING page containing MANY ${item}s.${extra} ` +
-    `Return an array with EVERY ${item} visible on the page, typically 10 to 100 of them, ` +
-    `as one JSON object each. Do NOT return only the first ${item}; a result with a single ${item} is wrong. ` +
-    `Each object must have exactly these fields: ${fields}. ` +
-    `Use these exact field names, and return each value as a plain scalar (a bare number or string), ` +
-    `not as a nested object. If a value is missing, return null for it. `
-  );
 }
 
 /**
@@ -39,20 +38,28 @@ function schemaClause(schema: TargetSchema): string {
  * Decorrelated failure modes are what let the Flock outvote a breakage.
  */
 export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, string> {
-  const base = schemaClause(schema);
-  return {
-    css:
-      base +
-      "Strategy: rely on the page's CSS class names and element IDs as selectors wherever possible.",
-    "text-anchor":
-      base +
-      "Strategy: do NOT rely on CSS class names or element IDs at all — they change often on this site. " +
-      "Locate each value by nearby visible text labels and recognizable value patterns instead " +
-      "(for example currency amounts, text following a label like 'Rating:', or phrases such as 'in stock').",
-    structural:
-      base +
-      "Strategy: rely on the DOM structure and element positions — repeated container elements in the " +
-      "main content region, and the order of child elements within each container — rather than specific " +
-      "class names or IDs.",
-  };
+  const item = (schema.itemLabel?.trim() || "item").slice(0, 30);
+  const fields = fieldList(schema);
+  const extra = schema.description?.trim();
+
+  const build = (strategy: VariantStrategy, withExtra: boolean): string =>
+    [
+      `Listing page with many ${item}s.`,
+      withExtra && extra ? extra : "",
+      `Return EVERY ${item} on the page as a separate JSON object, not just the first.`,
+      `Fields: ${fields}.`,
+      `Use these exact field names. Each value must be a plain number or string, never a nested object. Use null if missing.`,
+      STRATEGY_CLAUSE[strategy],
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+  const out = {} as Record<VariantStrategy, string>;
+  for (const strategy of Object.keys(STRATEGY_CLAUSE) as VariantStrategy[]) {
+    // Drop the user's optional instruction before truncating anything structural.
+    let prompt = build(strategy, true);
+    if (prompt.length > MAX_DESCRIPTION) prompt = build(strategy, false);
+    out[strategy] = prompt.slice(0, MAX_DESCRIPTION).trim();
+  }
+  return out;
 }
