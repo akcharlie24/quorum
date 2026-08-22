@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { MAX_DESCRIPTION } from "./strategies.js";
 import { readFileSync, unlinkSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -93,6 +93,61 @@ export async function createScraper(
     );
   }
   return { collectorId, raw: res };
+}
+
+/**
+ * Submit a build and return as soon as Bright Data has accepted it, without waiting
+ * for the ~25 minute AI generation. The CLI prints the collector id right after it
+ * creates the template, then merely polls — so once polling starts, the build is
+ * running server-side and our process is dead weight. Detaching this way means a
+ * dropped connection can no longer lose a collector id.
+ */
+export function createScraperDetached(
+  url: string,
+  description: string,
+  acceptTimeoutMs = 180_000
+): Promise<{ collectorId: string }> {
+  const desc = sanitizePrompt(description).slice(0, MAX_DESCRIPTION);
+  return new Promise((resolve, reject) => {
+    const child = spawn("bdata", ["scraper", "create", url, desc, "--json"], { env: process.env });
+    let out = "";
+    let settled = false;
+
+    const finish = (err: Error | null, collectorId?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.kill("SIGKILL"); } catch { /* already gone */ }
+      if (err) reject(err);
+      else resolve({ collectorId: collectorId! });
+    };
+
+    const onData = (chunk: Buffer) => {
+      out += chunk.toString();
+      if (/Invalid description|ai_trigger_failed|Failed to start AI generation/.test(out)) {
+        return finish(new Error(`Bright Data rejected the build: ${out.slice(-300)}`));
+      }
+      // "polling (attempt" only appears once AI generation is under way server-side.
+      if (/polling \(attempt|Step:/.test(out)) {
+        const id = out.match(COLLECTOR_RE)?.[0];
+        if (id) return finish(null, id);
+      }
+    };
+
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.on("error", (e) => finish(e));
+    child.on("close", () => {
+      const id = out.match(COLLECTOR_RE)?.[0];
+      if (id && !/Invalid description|Failed to start/.test(out)) finish(null, id);
+      else finish(new Error(`build not accepted: ${out.slice(-300)}`));
+    });
+
+    const timer = setTimeout(
+      () => finish(new Error("timed out waiting for Bright Data to accept the build")),
+      acceptTimeoutMs
+    );
+  });
 }
 
 /** Run a scraper; returns extracted rows. */

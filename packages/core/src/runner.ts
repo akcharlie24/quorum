@@ -36,7 +36,19 @@ export async function runCycle(
     variants.map(async (v) => {
       try {
         const { rows, raw } = await runScraper(v.collector_id, target.url);
-        if (!raw.ok) return { variant: v, rows: [], error: classifyError(raw) as string };
+        if (!raw.ok) {
+          // Keep the CLI's own words alongside our category — the category alone is
+          // useless when diagnosing a live target.
+          const detail = (raw.stderr || raw.stdout).replace(/Polling batch[^\n]*\n?/g, "").trim();
+          return {
+            variant: v,
+            rows: [],
+            error: `${classifyError(raw)}: ${detail.slice(-400) || `exit ${raw.exitCode}`}`,
+          };
+        }
+        if (rows.length === 0) {
+          return { variant: v, rows: [], error: "empty: scraper returned no rows" };
+        }
         return { variant: v, rows: normalizeRows(rows, target.schema), error: undefined };
       } catch (e) {
         return { variant: v, rows: [], error: String(e).slice(0, 500) };

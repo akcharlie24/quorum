@@ -1,4 +1,4 @@
-import { createScraper } from "./brightdata.js";
+import { createScraperDetached } from "./brightdata.js";
 import { addVariant, getTarget, upsertTarget } from "./db.js";
 import { appendJobLog, createJob, finishJob } from "./jobs.js";
 import { runCycle } from "./runner.js";
@@ -17,18 +17,15 @@ export function startFlockJob(name: string, url: string, schema: TargetSchema): 
       const target = upsertTarget(name, url, schema);
       const prompts = Object.entries(strategyPrompts(schema)) as [VariantStrategy, string][];
       appendJobLog(jobId, `Spinning up a Flock of ${prompts.length} scrapers for ${url}`);
-      appendJobLog(jobId, `Bright Data builds each scraper with AI — typically 5-15 min, up to 25 for complex pages.`);
 
+      // Detached: we record each collector id the moment Bright Data accepts the build,
+      // then let it generate server-side. Nothing here depends on staying connected.
       const results = await Promise.allSettled(
         prompts.map(async ([strategy, prompt]) => {
-          const t0 = Date.now();
-          appendJobLog(jobId, `→ ${STRATEGY_LABEL[strategy]} variant: submitted to Bright Data…`);
-          const { collectorId } = await createScraper(url, prompt);
+          appendJobLog(jobId, `→ ${STRATEGY_LABEL[strategy]} variant: submitting…`);
+          const { collectorId } = await createScraperDetached(url, prompt);
           addVariant(target.id, collectorId, strategy);
-          appendJobLog(
-            jobId,
-            `✔ ${STRATEGY_LABEL[strategy]} variant ready — ${collectorId} (${((Date.now() - t0) / 60000).toFixed(1)} min)`
-          );
+          appendJobLog(jobId, `✔ ${STRATEGY_LABEL[strategy]} accepted — ${collectorId} (building on Bright Data)`);
           return collectorId;
         })
       );
@@ -37,7 +34,11 @@ export function startFlockJob(name: string, url: string, schema: TargetSchema): 
       for (const r of results) {
         if (r.status === "rejected") appendJobLog(jobId, `✘ variant failed: ${String(r.reason).slice(0, 300)}`);
       }
-      appendJobLog(jobId, `Flock ready: ${ok}/${prompts.length} scrapers active.`);
+      appendJobLog(
+        jobId,
+        `${ok}/${prompts.length} scrapers accepted. Bright Data is generating them now (~10-25 min); ` +
+          `run a cycle once they finish to bring the Flock online.`
+      );
       if (ok === 0) finishJob(jobId, "error", "no scrapers could be created");
       else finishJob(jobId, "done");
     } catch (e) {
