@@ -115,6 +115,15 @@ export function retireVariants(targetId: number): number {
     .run(targetId).changes;
 }
 
+/**
+ * Retires a single variant so the Flock can regenerate it.
+ * Healing rewrites extraction logic; it cannot undo a collector that was generated
+ * to crawl detail pages. When a fix regresses, replacing the scraper is the cure.
+ */
+export function retireVariant(variantId: number): void {
+  db.prepare(`UPDATE variants SET status = 'retired' WHERE id = ?`).run(variantId);
+}
+
 export function getVariants(targetId: number): VariantRecord[] {
   return db
     .prepare(`SELECT * FROM variants WHERE target_id = ? AND status = 'active'`)
