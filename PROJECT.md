@@ -59,12 +59,12 @@ Every detection, breakage, and heal event is telemetry. Aggregated → a live "w
 ### 🔨 Phase 1 — The Flock, end to end (Layer 2) ← WE ARE HERE
 The demo-target site is part of this phase — Flock development *needs* a site we can break on purpose.
 
-- [ ] **1a. Demo-target site**: tiny product-listing page (Next.js static, deploy to Vercel). Clean semantic HTML v1. Include ~8 products with name/price/rating/stock so consensus voting has real fields. Prepare 2–3 pre-baked "mutation" branches (class renames, DOM restructure, silent price corruption) we can deploy on cue.
-- [ ] **1b. CLI wrapper** (`packages/core/brightdata.ts`): typed wrappers around `scraper create/run/heal/approve` via child process, `--json` parsing, error taxonomy (broken vs empty vs timeout vs 429-retry).
-- [ ] **1c. Flock generator**: for a target, fire 3 × `scraper create` in parallel with 3 strategy descriptions; persist collector IDs + metadata in SQLite. *(Start creations the moment credits land — 5–25 min each.)*
-- [ ] **1d. Parallel runner + consensus**: run all variants, normalize outputs to a common schema, field-level majority vote (~100 lines), store per-run results + votes in telemetry DB.
-- [ ] **1e. Heal loop**: variant loses the vote → auto-compose heal prompt from the diff ("field X returns undefined; consensus says it should look like Y") → `scraper heal` → compare `awaiting_approval` preview to consensus → `scraper approve` / `--reject`. Log every step as a heal event.
-- [ ] **1f. CLI proof**: `silk watch` terminal command that shows the whole loop live (this alone is demoable before any UI exists).
+- [x] **1a. Demo-target site** (`apps/demo-target`): "WebHead Gear" store, 8 products (name/price/rating/stock). Layouts: v1 clean · v2 redesign (renamed classes + restructured DOM) · v3 silent corruption (prices $0, stock 999). Mutate = edit `layout.config.json` + redeploy. ⏳ Vercel deploy pending `vercel login`.
+- [x] **1b. CLI wrapper** (`packages/core/src/brightdata.ts`): create/run/heal/approve via child process, defensive `--json` parsing, error taxonomy. ⚠️ JSON shapes unverified until first real calls.
+- [x] **1c. Flock generator**: `silk flock <url> <name>` — 3 parallel creates (css / text-anchor / structural prompts in `strategies.ts`), variants persisted in SQLite.
+- [x] **1d. Runner + consensus** (`runner.ts`, `consensus.ts`): parallel runs, normalization + coercion, field-level majority vote with numeric tolerance, verdicts (healthy/dissenting/broken), full telemetry. **7/7 unit tests pass.**
+- [x] **1e. Heal loop** (`healer.ts`): auto-composed heal prompt from consensus diff → heal → preview scored vs consensus (≥90% → approve, else reject + 1 sharper retry → needs_human). All lifecycle in `heal_events`.
+- [x] **1f. CLI proof**: `silk flock/run/watch/status` via `npm run silk --`.
 
 **Phase 1 exit criterion = the core demo works headless:** break demo site → variant fails vote → heal → consensus-approved → pipeline output never corrupted.
 
@@ -139,3 +139,4 @@ Mutation types: class/id renames · DOM restructure · field removal · **silent
 
 - **2026-08-22 (am):** Idea locked (Flock + Spider-Sense + Volatility Index = SILK). PROJECT.md created.
 - **2026-08-22 (pm):** Verified real BD CLI surface from docs — `scraper create/run/heal/approve` with approval gate + `--reject`; SILK's consensus becomes the programmatic approval brain (stronger than planned!). Build order flipped per Akshat: **Flock (Layer 2) first**, incl. demo-target site; Spider-Sense + Bugle after. Waiting on: BD API token to start `scraper create` bakes.
+- **2026-08-22 (later):** API key in `.env` ✅; `bdata` CLI v0.3.5 installed, auth confirmed via `zones` (budget endpoint needs admin scope — harmless). **Entire Phase 1 core built and committed**: demo site (3 layouts), BD wrapper, telemetry DB, consensus (7/7 tests), heal-approve loop, `silk` CLI. **Blocked on one user action: `vercel login`** → then deploy demo site → fire `silk flock` (3 × 5–25 min bake) → Step 8 rehearsal.
