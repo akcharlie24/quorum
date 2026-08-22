@@ -60,13 +60,28 @@ export function classifyError(res: CliResult): BdError {
 
 const COLLECTOR_RE = /c_[a-z0-9]{6,}/i;
 
+/**
+ * Smart punctuation and other non-ASCII characters have caused collector builds to
+ * fail half-way, so prompts are flattened to plain ASCII before they leave the process.
+ */
+export function sanitizePrompt(text: string): string {
+  return text
+    .replace(/[‐-―]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, "...")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Submit scraper creation. Bakes 5-25 min server-side; resolves when the CLI returns. */
 export async function createScraper(
   url: string,
   description: string,
   timeoutMs = 30 * 60_000
 ): Promise<{ collectorId: string; raw: CliResult }> {
-  const res = await runCli(["scraper", "create", url, description, "--json"], timeoutMs);
+  const res = await runCli(["scraper", "create", url, sanitizePrompt(description), "--json"], timeoutMs);
   const fromJson = JSON.stringify(res.json ?? "").match(COLLECTOR_RE)?.[0];
   const fromText = (res.stdout + res.stderr).match(COLLECTOR_RE)?.[0];
   const collectorId = fromJson ?? fromText ?? "";

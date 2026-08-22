@@ -17,7 +17,7 @@ function schemaClause(schema: TargetSchema): string {
   const fields = Object.entries(schema.fields)
     .map(([name, type]) =>
       type === "number"
-        ? `${name} (number, digits only — no currency symbols or units)`
+        ? `${name} (number, digits only, no currency symbols or units)`
         : type === "integer"
           ? `${name} (integer, digits only)`
           : `${name} (string)`
@@ -26,7 +26,7 @@ function schemaClause(schema: TargetSchema): string {
   const extra = schema.description?.trim() ? ` ${schema.description.trim()}` : "";
   return (
     `This is a LISTING page containing MANY ${item}s.${extra} ` +
-    `Return an array with EVERY ${item} visible on the page — typically 10 to 100 of them — ` +
+    `Return an array with EVERY ${item} visible on the page, typically 10 to 100 of them, ` +
     `as one JSON object each. Do NOT return only the first ${item}; a result with a single ${item} is wrong. ` +
     `Each object must have exactly these fields: ${fields}. ` +
     `Use these exact field names, and return each value as a plain scalar (a bare number or string), ` +

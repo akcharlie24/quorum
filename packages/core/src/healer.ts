@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { approveHeal, healScraper } from "./brightdata.js";
+import { approveHeal, healScraper, sanitizePrompt } from "./brightdata.js";
 import { decideHealEvent, startHealEvent, type TargetRecord, type VariantRecord } from "./db.js";
 import { consensus, normalizeRows } from "./consensus.js";
 import type { Row, VariantRunResult } from "./types.js";
@@ -79,7 +79,7 @@ export async function healAndDecide(
     const healId = startHealEvent(variant.id, triggerRunId, prompt);
     log(pc.yellow(`  ⚕ heal attempt ${attempt} for variant ${variant.strategy} (${variant.collector_id})`));
 
-    const heal = await healScraper(variant.collector_id, prompt);
+    const heal = await healScraper(variant.collector_id, sanitizePrompt(prompt));
     const score = previewMatchScore(heal.preview, consensusRows, target);
     log(pc.dim(`    heal status=${heal.status} previewRows=${heal.preview.length} matchScore=${(score * 100).toFixed(1)}%`));
 
