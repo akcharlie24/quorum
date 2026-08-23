@@ -210,6 +210,11 @@ test("network failures are never treated as scraper breakage", () => {
   // a genuine extraction fault must still be healable
   // a batch job we stopped waiting for is our impatience, not a scraper defect
   assert.ok(isInfrastructureFailure("timeout: Collecting (batch)..."));
+  // running out of credit is a billing state, not a broken scraper
+  const broke = { ok: false, exitCode: 1, json: null, timedOut: false, stdout: "",
+    stderr: "Error: insufficient balance to run this collector" };
+  assert.equal(classifyError(broke), "no_credit");
+  assert.ok(isInfrastructureFailure("no_credit: insufficient balance"));
   assert.ok(!isInfrastructureFailure("schema-mismatch: 250 raw row(s)"));
   assert.ok(!isInfrastructureFailure("empty: scraper returned no rows"));
 });

@@ -14,7 +14,7 @@ export interface CliResult {
   timedOut: boolean;
 }
 
-export type BdError = "broken" | "empty" | "timeout" | "rate_limited" | "network";
+export type BdError = "broken" | "empty" | "timeout" | "rate_limited" | "network" | "no_credit";
 
 function extractJson(text: string): unknown | null {
   // CLI mixes progress lines with JSON; grab the last {...} or [...] block.
@@ -63,6 +63,17 @@ export function classifyError(res: CliResult): BdError {
   // We killed it: that is our impatience, whatever the log happens to say.
   if (res.timedOut) return "timeout";
   const text = (res.stdout + res.stderr).toLowerCase();
+  // An exhausted account is a billing state, not a defect in the scraper.
+  if (
+    text.includes("insufficient") ||
+    text.includes("no credit") ||
+    text.includes("out of credit") ||
+    text.includes("payment") ||
+    text.includes("quota exceeded") ||
+    text.includes("balance")
+  ) {
+    return "no_credit";
+  }
   if (text.includes("429") || text.includes("rate limit")) return "rate_limited";
   // Our own connectivity failing is not the scraper's fault — healing it would be
   // both wasteful and dangerous, since a healthy scraper could be "fixed" into a
@@ -89,7 +100,10 @@ export function classifyError(res: CliResult): BdError {
 export function isInfrastructureFailure(error: string | undefined): boolean {
   return (
     !!error &&
-    (error.startsWith("network") || error.startsWith("rate_limited") || error.startsWith("timeout"))
+    (error.startsWith("network") ||
+      error.startsWith("rate_limited") ||
+      error.startsWith("timeout") ||
+      error.startsWith("no_credit"))
   );
 }
 
