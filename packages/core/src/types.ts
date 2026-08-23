@@ -8,6 +8,12 @@ export type TargetSchema = {
   itemLabel?: string;
   /** Optional extra instruction from the user about what to extract. */
   description?: string;
+  /**
+   * Explicit page URLs to scrape instead of crawling from one listing page.
+   * Handing Bright Data the item pages directly stops its planner inventing a
+   * discovery crawl — which on Steam fetched ~150 pages per run and returned nothing.
+   */
+  urls?: string[];
 };
 
 export type Row = Record<string, unknown>;

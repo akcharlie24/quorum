@@ -1,10 +1,10 @@
 import { strategyPrompts, MAX_DESCRIPTION } from "../src/strategies.ts";
-const fat = {
+const pdp = {
   keyField: "title",
-  fields: { title: "string" as const, price: "number" as const, rating: "number" as const, availability: "string" as const },
-  itemLabel: "product listing entry",
-  description: "Only items in the main grid, ignore sponsored placements entirely please.",
+  fields: { title: "string" as const, price: "number" as const },
+  itemLabel: "game",
+  urls: ["https://store.steampowered.com/app/1142710/"],
 };
-for (const [k, v] of Object.entries(strategyPrompts(fat))) {
+for (const [k, v] of Object.entries(strategyPrompts(pdp))) {
   console.log(`--- ${k} (${v.length}/${MAX_DESCRIPTION})\n${v}\n`);
 }

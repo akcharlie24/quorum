@@ -37,7 +37,7 @@ export async function runCycle(
   const results = await Promise.all(
     variants.map(async (v) => {
       try {
-        const { rows, raw } = await runScraper(v.collector_id, target.url);
+        const { rows, raw } = await runScraper(v.collector_id, target.url, target.schema.urls);
         if (!raw.ok) {
           // Keep the CLI's own words alongside our category — the category alone is
           // useless when diagnosing a live target.

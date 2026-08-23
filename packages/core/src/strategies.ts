@@ -50,7 +50,18 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
    * a blind slice used to cut the strategy clause mid-word, which is the one part that
    * makes the three variants differ at all.
    */
-  const clauses = (strategy: VariantStrategy): { text: string; priority: number }[] => [
+  // Given explicit page URLs, each page describes ONE item — asking for a list there
+  // is what made Steam return {"games": []} five builds running.
+  const perPage = (schema.urls?.length ?? 0) > 0;
+
+  const clauses = (strategy: VariantStrategy): { text: string; priority: number }[] => perPage ? [
+    { text: `Each page describes ONE ${item}.`, priority: 0 },
+    { text: extra ?? "", priority: 5 },
+    { text: `Return a single JSON object for the ${item} on the page, not an array and not nested.`, priority: 1 },
+    { text: `Fields: ${fields}.`, priority: 0 },
+    { text: `Use these exact field names. Values must be plain numbers or strings, never nested objects. Use null if missing.`, priority: 2 },
+    { text: STRATEGY_CLAUSE[strategy], priority: 1 },
+  ] : [
     { text: `Listing page with many ${item}s.`, priority: 3 },
     { text: extra ?? "", priority: 5 },
     { text: `Read ONLY this page. Do not follow links or open individual ${item} pages.`, priority: 4 },
