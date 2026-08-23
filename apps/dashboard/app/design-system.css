@@ -1556,3 +1556,25 @@ td.num {
     transform: none;
   }
 }
+
+/* ---- consensus table: make "what shipped" unmistakable -------------------- */
+/* A disputed cell shows the accepted value first, then each rejected reading
+   struck through and attributed, so the table answers "what did we take, and
+   what did we throw away?" without a legend lookup. */
+.cell-kept { font-weight: 650; }
+.cell-disputed .cell-kept { box-shadow: inset 0 -0.45em 0 var(--dissent-soft); }
+
+.disputed-note { display: block; margin-top: 4px; }
+.rejected-reading { display: block; font-size: 11px; line-height: 1.5; font-family: var(--mono); }
+.rejected-by { color: var(--ink-4); }
+.rejected-by::after { content: " read "; color: var(--ink-4); }
+.rejected-value { color: var(--dissent-2); text-decoration: line-through; }
+
+.table-legend {
+  display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+  padding: 10px 14px; border-top: 1px solid var(--line);
+  font-size: 11.5px; color: var(--ink-3);
+}
+.table-legend .swatch { width: 10px; height: 10px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+.table-legend .swatch-kept { background: var(--agree-soft); border: 1px solid var(--agree); }
+.table-legend .swatch-disputed { background: var(--dissent-soft); border: 1px solid var(--dissent); }

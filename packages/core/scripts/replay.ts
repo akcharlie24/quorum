@@ -6,6 +6,11 @@ import { prisma } from "../src/prisma.ts";
 import { consensus } from "../src/consensus.ts";
 import type { Row, TargetSchema } from "../src/types.ts";
 
+// `--write` re-votes a stored run in place: the scraped rows are untouched, only the
+// verdicts and consensus are recomputed. That lets a voting-rule fix reach runs that
+// were recorded under the old rules, without paying to scrape them again.
+const WRITE = process.argv.includes("--write");
+
 async function main() {
   const name = process.argv[2] ?? "steam-prices";
   const target = await prisma.target.findFirstOrThrow({ where: { name } });
@@ -35,7 +40,34 @@ async function main() {
   }
   const priced = res.rows.filter((r) => r.price !== null && r.price !== undefined).length;
   console.log(`\n${res.rows.length} rows, ${priced} with a price:`);
-  for (const r of res.rows) console.log("  %-34s %s", String(r.title).slice(0, 34), r.price);
+  for (const r of res.rows) {
+    console.log(`  ${String(r.title).slice(0, 34).padEnd(34)} ${r.price ?? "—"}`);
+  }
+
+  if (WRITE) {
+    await prisma.$transaction([
+      prisma.run.update({ where: { id: run.id }, data: { consensus_json: JSON.stringify(res.rows) } }),
+      prisma.vote.deleteMany({ where: { run_id: run.id } }),
+      prisma.vote.createMany({
+        data: res.votes.map((v) => ({
+          run_id: run.id,
+          row_key: v.rowKey,
+          field: v.field,
+          consensus_value: JSON.stringify(v.consensusValue ?? null),
+          dissenting_json: JSON.stringify(v.dissenting),
+        })),
+      }),
+      ...res.verdicts.map((v) =>
+        prisma.variantResult.updateMany({
+          where: { run_id: run.id, variant_id: v.variantId },
+          data: { status: v.status, dissents_json: JSON.stringify(v.dissents) },
+        })
+      ),
+    ]);
+    console.log(`\nwrote corrected consensus + ${res.votes.length} votes back to run #${run.id}`);
+  } else {
+    console.log("\n(dry run — pass --write to persist)");
+  }
   await prisma.$disconnect();
 }
 main();

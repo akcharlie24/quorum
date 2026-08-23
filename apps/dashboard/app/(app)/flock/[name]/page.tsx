@@ -199,7 +199,8 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
             <span className="eyebrow no-rule">Output</span>
             <div className="h2" style={{ marginTop: 6 }}>Consensus table</div>
             <div className="sub faint" style={{ marginTop: 3 }}>
-              What the pipeline emits — every value agreed by at least 2 of {detail.variants.length} scrapers.
+              What the pipeline actually ships. Each value is the one the flock agreed on; where they
+              disagreed, the rejected readings are listed beneath it.
             </div>
           </div>
           {detail.votes.length > 0 && (
@@ -235,16 +236,25 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
                         const type = detail.schema.fields[f];
                         return (
                           <td key={f} className={`${type === "string" ? "" : "num"} ${disputed ? "cell-disputed" : ""}`}>
-                            {row[f] === null || row[f] === undefined ? (
-                              <span className="faint">—</span>
-                            ) : (
-                              String(row[f])
-                            )}
+                            <span className={disputed ? "cell-kept" : undefined}>
+                              {row[f] === null || row[f] === undefined ? (
+                                <span className="faint">—</span>
+                              ) : (
+                                String(row[f])
+                              )}
+                            </span>
                             {vote && vote.dissenting.length > 0 && (
                               <span className="disputed-note">
-                                {vote.dissenting
-                                  .map((d) => `${strategyOf(d.variantId)} said ${JSON.stringify(d.value)}`)
-                                  .join(" · ")}
+                                {vote.dissenting.map((d) => (
+                                  <span key={d.variantId} className="rejected-reading">
+                                    <span className="rejected-by">{strategyOf(d.variantId)}</span>
+                                    <span className="rejected-value">
+                                      {d.value === null || d.value === undefined || d.value === ""
+                                        ? "found nothing"
+                                        : String(d.value)}
+                                    </span>
+                                  </span>
+                                ))}
                               </span>
                             )}
                           </td>
@@ -255,6 +265,11 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
                 })}
               </tbody>
             </table>
+            <div className="table-legend">
+              <span><i className="swatch swatch-kept" /> shipped — what the flock agreed on</span>
+              <span><i className="swatch swatch-disputed" /> disputed cell — a scraper read it differently</span>
+              <span className="faint">struck values were rejected by the vote and never leave the pipeline</span>
+            </div>
           </div>
         )}
       </div>
