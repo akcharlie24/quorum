@@ -1,4 +1,4 @@
-# ◎ QUORUM
+# QUORUM
 
 **The reliability layer for Bright Data scrapers.**
 
