@@ -7,20 +7,9 @@ import { STRATEGY_BLURB, STRATEGY_LABEL } from "@silk/core/browser";
 import { logClass, timeAgo } from "@/lib/format";
 import { Reveal } from "@/components/reveal";
 import { RunHistory } from "@/components/run-history";
+import { DriftSignals } from "@/components/drift-signals";
 
 /** Said in the header so a status never has to be guessed at. */
-/**
- * Spider-Sense signals, said in words rather than enum names. The kind is the finding;
- * the alert's own `detail` carries the numbers.
- */
-const DRIFT_MEANING: Record<string, string> = {
-  row_count_drop: "Far fewer rows than usual",
-  null_spike: "A field started coming back empty",
-  field_vanished: "A field stopped extracting entirely",
-  value_collapse: "Every row now reports the same value",
-  distribution_shift: "The values moved well outside their usual range",
-};
-
 const HEALTH_MEANING: Record<string, string> = {
   healthy: "every scraper agreed",
   protected: "scrapers disagreed — the vote resolved it and kept the bad reading out",
@@ -188,32 +177,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
               Consensus compares scrapers to each other. This compares the run to its own history.
             </div>
           </div>
-          {detail.driftAlerts.length === 0 ? (
-            <div className="panel empty">
-              No drift against this flock&apos;s recent runs — row counts, empty-value rates and
-              value spreads all sit where they have been sitting.
-            </div>
-          ) : (
-            <div className="sentry">
-              {detail.driftAlerts.map((a) => (
-                <div className={`sentry-row sev-${a.severity}`} key={a.id}>
-                  <div className="sentry-head">
-                    <span className="sentry-field">{a.field ?? "dataset"}</span>
-                    <span className="sentry-kind">{DRIFT_MEANING[a.kind] ?? a.kind}</span>
-                    <span className="sentry-sev">{a.severity}</span>
-                  </div>
-                  <div className="sentry-detail">{a.detail}</div>
-                  {a.fleetWide && (
-                    <div className="sentry-fleet">
-                      All {detail.variants.length} scrapers agreed on this. The vote had nothing to
-                      compare and raised nothing — a single-scraper pipeline and a flock would both
-                      have shipped it.
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <DriftSignals alerts={detail.driftAlerts} scraperCount={detail.variants.length} />
         </div>
       )}
 
