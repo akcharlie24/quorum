@@ -40,6 +40,13 @@ COPY . .
 RUN npm run build --workspace @silk/dashboard
 
 ENV NODE_ENV=production
+
+# Serverless Postgres (Neon) and connection poolers do not reliably hold the session-level
+# advisory lock the migration engine takes out — a failed attempt leaves the lock orphaned
+# and every later deploy hangs on it. Safe to disable here: this runs as a single instance,
+# and `migrate deploy` is a no-op read when the schema is already current.
+ENV PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=true
+
 EXPOSE 3939
 
 # Migrations run at release, not at build: the database only exists at run time.

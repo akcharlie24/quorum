@@ -1,0 +1,30 @@
+# Render blueprint for Quorum.
+#
+# Docker rather than a native Node runtime because the app shells out to the Bright Data
+# CLI (`bdata`) as a child process — see the Dockerfile header for why serverless is out.
+#
+# Postgres is NOT declared here: Render's managed Postgres free tier expires after 30 days,
+# so the database lives on Neon and DATABASE_URL is set manually in the dashboard.
+services:
+  - type: web
+    name: quorum
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    branch: main
+    healthCheckPath: /
+    envVars:
+      # Both marked sync:false — Render prompts for them instead of storing them in git.
+      # Pooled Neon endpoint — what the running app uses.
+      - key: DATABASE_URL
+        sync: false
+      # Direct (non-pooled) Neon endpoint — migrations only. Same string with the
+      # "-pooler" removed from the host. Prisma's migration engine cannot run through
+      # PgBouncer; see packages/core/prisma.config.ts.
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: BRIGHTDATA_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production

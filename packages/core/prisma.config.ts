@@ -17,6 +17,13 @@ try {
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: env("DATABASE_URL"),
+    // Migrations only. This config is read by the Prisma CLI; the runtime client builds
+    // its own connection in src/prisma.ts from DATABASE_URL.
+    //
+    // That split matters on Neon (and any PgBouncer setup): the app wants the pooled
+    // endpoint, but the migration engine needs a direct one — through the pooler it
+    // fails with "migration persistence is not initialized", because transaction
+    // pooling cannot hold the session-level advisory lock migrations take out.
+    url: env(process.env.DIRECT_DATABASE_URL ? "DIRECT_DATABASE_URL" : "DATABASE_URL"),
   },
 });
