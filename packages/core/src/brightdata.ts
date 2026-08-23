@@ -193,9 +193,9 @@ export async function runScraper(
   collectorId: string,
   url?: string,
   // Heavy pages (Steam) exceed Bright Data's realtime limit and fall back to batch
-  // mode, where a single collection can run an hour. Cutting a batch job short marks
-  // a working scraper broken, so this waits far longer than a realtime scrape needs.
-  timeoutMs = 75 * 60_000
+  // mode; observed collections have outlived 75 minutes. Cutting a batch job short
+  // marks a working scraper broken, so we wait far longer than realtime ever needs.
+  timeoutMs = 180 * 60_000
 ): Promise<{ rows: unknown[]; raw: CliResult }> {
   const dir = mkdtempSync(join(tmpdir(), "silk-run-"));
   const outFile = join(dir, "out.json");
