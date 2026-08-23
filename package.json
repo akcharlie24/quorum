@@ -2,7 +2,7 @@
   "name": "silk",
   "private": true,
   "version": "0.1.0",
-  "description": "SILK — the immune system for web scrapers (Scrape-Verse hackathon)",
+  "description": "SILK \u2014 the immune system for web scrapers (Scrape-Verse hackathon)",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -10,7 +10,12 @@
   "scripts": {
     "silk": "tsx packages/core/src/cli.ts",
     "demo:build": "node apps/demo-target/build.mjs",
-    "demo:deploy": "node apps/demo-target/build.mjs && cd apps/demo-target && vercel deploy --prod --yes"
+    "demo:deploy": "node apps/demo-target/build.mjs && cd apps/demo-target && vercel deploy --prod --yes",
+    "db:deploy": "prisma migrate deploy --config packages/core/prisma.config.ts",
+    "db:backfill": "tsx packages/core/scripts/backfill-drift.ts",
+    "seed:demo": "tsx packages/core/src/seed-demo.ts",
+    "build": "npm run build --workspace @silk/dashboard",
+    "start": "npm run start --workspace @silk/dashboard"
   },
   "engines": {
     "node": ">=20"

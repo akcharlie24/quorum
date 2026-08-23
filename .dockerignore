@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+.vercel
+**/.vercel
+packages/core/src/generated
+.DS_Store
