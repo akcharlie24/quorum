@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { classifyError, isInfrastructureFailure, runScraper } from "./brightdata.js";
+import { classifyError, isInfrastructureFailure, runScraper } from "./brightdata.ts";
 import {
   finishRun,
   getVariants,
@@ -28,10 +28,10 @@ export async function runCycle(
   opts: { heal?: boolean } = { heal: true },
   log: (msg: string) => void = console.log
 ): Promise<CycleResult> {
-  const variants = getVariants(target.id);
+  const variants = await getVariants(target.id);
   if (variants.length === 0) throw new Error(`target "${target.name}" has no variants — run silk flock first`);
 
-  const runId = startRun(target.id);
+  const runId = await startRun(target.id);
   log(pc.bold(`\n🕷  run #${runId} · ${target.name} · ${variants.length} variants`));
 
   const results = await Promise.all(
@@ -78,7 +78,7 @@ export async function runCycle(
 
   for (const v of res.verdicts) {
     const variant = variants.find((x) => x.id === v.variantId)!;
-    recordVariantResult(runId, v.variantId, v.status, v.rows, v.error, v.dissents);
+    await recordVariantResult(runId, v.variantId, v.status, v.rows, v.error, v.dissents);
     log(
       `  ${STATUS_ICON[v.status]} ${variant.strategy.padEnd(12)} ${v.status}` +
         (v.dissents.length ? pc.dim(` (outvoted on ${v.dissents.length} cells)`) : "") +
@@ -86,22 +86,22 @@ export async function runCycle(
     );
   }
   for (const vote of res.votes) {
-    recordVote(runId, vote.rowKey, vote.field, vote.consensusValue, vote.dissenting);
+    await recordVote(runId, vote.rowKey, vote.field, vote.consensusValue, vote.dissenting);
   }
-  finishRun(runId, res.rows);
+  await finishRun(runId, res.rows);
   log(pc.dim(`  consensus dataset: ${res.rows.length} rows — pipeline output is clean`));
 
   // An approved fix is only provisional. Bright Data's preview can look perfect while
   // the deployed scraper still fails, so every approval must survive a real run.
-  for (const heal of unverifiedHeals(target.id)) {
+  for (const heal of await unverifiedHeals(target.id)) {
     const verdict = res.verdicts.find((v) => v.variantId === heal.variant_id);
     if (!verdict || isInfrastructureFailure(verdict.error)) continue;
     const strategy = variants.find((x) => x.id === heal.variant_id)?.strategy ?? String(heal.variant_id);
     if (verdict.status === "healthy") {
-      setHealVerification(heal.id, "verified", `confirmed healthy on run #${runId}`);
+      await setHealVerification(heal.id, "verified", `confirmed healthy on run #${runId}`);
       log(pc.green(`  ✔ heal VERIFIED in production — ${strategy} healthy on run #${runId}`));
     } else {
-      setHealVerification(heal.id, "regressed", `still ${verdict.status} on run #${runId}`);
+      await setHealVerification(heal.id, "regressed", `still ${verdict.status} on run #${runId}`);
       log(pc.red(`  ✘ heal FAILED verification — ${strategy} still ${verdict.status} despite an approved fix`));
     }
   }

@@ -9,4 +9,5 @@ node_modules/
 .next/
 .vercel/
 dist/
+packages/core/src/generated/
 .DS_Store

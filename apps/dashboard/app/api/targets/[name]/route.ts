@@ -8,7 +8,7 @@ loadEnv();
 
 export async function GET(_req: Request, ctx: { params: Promise<{ name: string }> }) {
   const { name } = await ctx.params;
-  const detail = getTargetDetail(decodeURIComponent(name));
+  const detail = await getTargetDetail(decodeURIComponent(name));
   if (!detail) return NextResponse.json({ error: "not found" }, { status: 404 });
-  return NextResponse.json({ detail, jobs: recentJobs(decodeURIComponent(name), 5) });
+  return NextResponse.json({ detail, jobs: await recentJobs(decodeURIComponent(name), 5) });
 }

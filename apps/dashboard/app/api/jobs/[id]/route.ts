@@ -8,7 +8,7 @@ loadEnv();
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const job = getJob(Number(id));
+  const job = await getJob(Number(id));
   if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json({ job });
 }

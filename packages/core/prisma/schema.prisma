@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Target {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  url         String
+  schema_json String
+  created_at  DateTime  @default(now())
+  variants    Variant[]
+  runs        Run[]
+
+  @@map("targets")
+}
+
+model Variant {
+  id           Int             @id @default(autoincrement())
+  target_id    Int
+  collector_id String
+  strategy     String
+  status       String          @default("active")
+  created_at   DateTime        @default(now())
+  target       Target          @relation(fields: [target_id], references: [id])
+  results      VariantResult[]
+  heals        HealEvent[]
+
+  @@map("variants")
+}
+
+model Run {
+  id             Int             @id @default(autoincrement())
+  target_id      Int
+  started_at     DateTime
+  finished_at    DateTime?
+  consensus_json String?
+  target         Target          @relation(fields: [target_id], references: [id])
+  results        VariantResult[]
+  votes          Vote[]
+  triggeredHeals HealEvent[]
+
+  @@map("runs")
+}
+
+model VariantResult {
+  id            Int     @id @default(autoincrement())
+  run_id        Int
+  variant_id    Int
+  status        String
+  rows_json     String?
+  error         String?
+  dissents_json String?
+  run           Run     @relation(fields: [run_id], references: [id])
+  variant       Variant @relation(fields: [variant_id], references: [id])
+
+  @@map("variant_results")
+}
+
+model Vote {
+  id              Int     @id @default(autoincrement())
+  run_id          Int
+  row_key         String
+  field           String
+  consensus_value String?
+  dissenting_json String?
+  run             Run     @relation(fields: [run_id], references: [id])
+
+  @@map("votes")
+}
+
+model HealEvent {
+  id             Int       @id @default(autoincrement())
+  variant_id     Int
+  trigger_run_id Int?
+  prompt         String
+  preview_json   String?
+  /// approved | rejected | needs_human | pending
+  verdict        String?
+  verdict_reason String?
+  /// null = awaiting a live run, "verified" = proven in production, "regressed" = fix did not hold
+  verification   String?
+  started_at     DateTime  @default(now())
+  decided_at     DateTime?
+  variant        Variant   @relation(fields: [variant_id], references: [id])
+  trigger_run    Run?      @relation(fields: [trigger_run_id], references: [id])
+
+  @@map("heal_events")
+}
+
+model Job {
+  id          Int       @id @default(autoincrement())
+  kind        String
+  target_name String
+  status      String
+  log_json    String    @default("[]")
+  error       String?
+  created_at  DateTime  @default(now())
+  finished_at DateTime?
+
+  @@map("jobs")
+}

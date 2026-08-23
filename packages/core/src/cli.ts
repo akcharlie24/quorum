@@ -43,14 +43,14 @@ async function main() {
     case "flock": {
       const [url, name] = args;
       if (!url || !name) usage();
-      const target = upsertTarget(name, url, DEFAULT_SCHEMA);
+      const target = await upsertTarget(name, url, DEFAULT_SCHEMA);
       console.log(pc.bold(`Creating flock for ${name} (${url}) — 3 variants, 5-25 min each, running in parallel…`));
       const entries = Object.entries(strategyPrompts(DEFAULT_SCHEMA)) as [VariantStrategy, string][];
       const results = await Promise.allSettled(
         entries.map(async ([strategy, prompt]) => {
           const t0 = Date.now();
           const { collectorId } = await createScraper(url, prompt);
-          addVariant(target.id, collectorId, strategy);
+          await addVariant(target.id, collectorId, strategy);
           const mins = ((Date.now() - t0) / 60000).toFixed(1);
           console.log(pc.green(`  ✔ ${strategy}: ${collectorId} (${mins} min)`));
           return collectorId;
@@ -65,7 +65,7 @@ async function main() {
     case "run": {
       const name = args[0];
       if (!name) usage();
-      const target = getTarget(name);
+      const target = await getTarget(name);
       if (!target) { console.error(pc.red(`unknown target "${name}"`)); process.exit(1); }
       const heal = !args.includes("--no-heal");
       const res = await runCycle(target, { heal });
@@ -76,7 +76,7 @@ async function main() {
     case "watch": {
       const name = args[0];
       if (!name) usage();
-      const target = getTarget(name);
+      const target = await getTarget(name);
       if (!target) { console.error(pc.red(`unknown target "${name}"`)); process.exit(1); }
       const interval = Number(args[1] ?? 120) * 1000;
       console.log(pc.bold(`👁  watching ${name} every ${interval / 1000}s — Ctrl+C to stop`));
@@ -92,17 +92,17 @@ async function main() {
     }
 
     case "status": {
-      for (const t of allTargets()) {
+      for (const t of await allTargets()) {
         console.log(pc.bold(`\n${t.name}  ${pc.dim(t.url)}`));
-        for (const v of getVariants(t.id)) {
+        for (const v of await getVariants(t.id)) {
           console.log(`  ${v.strategy.padEnd(12)} ${v.collector_id}`);
         }
-        for (const r of lastRuns(t.id, 5) as { id: number; started_at: string; consensus_json: string | null }[]) {
+        for (const r of await lastRuns(t.id, 5)) {
           const rows = r.consensus_json ? JSON.parse(r.consensus_json).length : 0;
           console.log(pc.dim(`  run #${r.id} ${r.started_at} — ${rows} consensus rows`));
         }
       }
-      const pending = pendingHeals();
+      const pending = await pendingHeals();
       if (pending.length) console.log(pc.yellow(`\n${pending.length} heal(s) pending`));
       break;
     }

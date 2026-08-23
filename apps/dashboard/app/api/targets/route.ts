@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 loadEnv();
 
 export async function GET() {
-  reapStaleJobs();
-  return NextResponse.json({ targets: listTargets(), jobs: recentJobs(undefined, 6) });
+  await reapStaleJobs();
+  return NextResponse.json({ targets: await listTargets(), jobs: await recentJobs(undefined, 6) });
 }
 
 export async function POST(req: Request) {
@@ -40,6 +40,6 @@ export async function POST(req: Request) {
     description: body.description?.trim() || undefined,
   };
 
-  const jobId = startFlockJob(name, url, schema, { replace: body.replace === true });
+  const jobId = await startFlockJob(name, url, schema, { replace: body.replace === true });
   return NextResponse.json({ jobId, name });
 }

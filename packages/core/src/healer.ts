@@ -1,8 +1,8 @@
 import pc from "picocolors";
-import { approveHeal, healScraper, sanitizePrompt } from "./brightdata.js";
-import { decideHealEvent, startHealEvent, type TargetRecord, type VariantRecord } from "./db.js";
-import { normalizeRows, rowKeyOf, valuesEqual } from "./consensus.js";
-import type { Row, VariantRunResult } from "./types.js";
+import { approveHeal, healScraper, sanitizePrompt } from "./brightdata.ts";
+import { decideHealEvent, startHealEvent, type TargetRecord, type VariantRecord } from "./db.ts";
+import { normalizeRows, rowKeyOf, valuesEqual } from "./consensus.ts";
+import type { Row, VariantRunResult } from "./types.ts";
 
 const APPROVE_THRESHOLD = 0.9;
 /** A healed scraper must claim at least this share of the consensus row count. */
@@ -104,7 +104,7 @@ export async function healAndDecide(
   let prompt = composeHealPrompt(verdict, consensusRows, target);
 
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const healId = startHealEvent(variant.id, triggerRunId, prompt);
+    const healId = await startHealEvent(variant.id, triggerRunId, prompt);
     log(pc.yellow(`  ⚕ heal attempt ${attempt} for variant ${variant.strategy} (${variant.collector_id})`));
 
     const heal = await healScraper(variant.collector_id, sanitizePrompt(prompt));
@@ -133,7 +133,7 @@ export async function healAndDecide(
     if (s.sampleRows > 0 && s.precision >= APPROVE_THRESHOLD && enoughRows) {
       const res = await approveHeal(variant.collector_id);
       const ok = res.ok;
-      decideHealEvent(
+      await decideHealEvent(
         healId,
         ok ? "approved" : "needs_human",
         ok
@@ -157,7 +157,7 @@ export async function healAndDecide(
           ? `preview claims only ${s.claimedRows} of ~${consensusRows.length} rows`
           : `preview matched consensus at only ${pct}% (< ${APPROVE_THRESHOLD * 100}%)`;
     await approveHeal(variant.collector_id, { reject: true });
-    decideHealEvent(healId, "rejected", why, heal.preview);
+    await decideHealEvent(healId, "rejected", why, heal.preview);
     log(pc.red(`    ✘ fix REJECTED by consensus — ${why}`));
 
     // Sharpen the prompt for the retry with explicit expected data.

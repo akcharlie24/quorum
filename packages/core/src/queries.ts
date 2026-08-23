@@ -1,4 +1,4 @@
-import { db } from "./db.ts";
+import { prisma } from "./prisma.ts";
 import type { Row, TargetSchema, VariantStrategy } from "./types.ts";
 
 export interface VariantView {
@@ -53,137 +53,145 @@ export interface TargetDetail extends TargetSummary {
   history: { runId: number; startedAt: string; healthy: number; dissenting: number; broken: number }[];
 }
 
-function latestRunId(targetId: number): number | null {
-  const r = db
-    .prepare(`SELECT id FROM runs WHERE target_id = ? AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1`)
-    .get(targetId) as { id: number } | undefined;
+async function latestRunId(targetId: number): Promise<number | null> {
+  const r = await prisma.run.findFirst({
+    where: { target_id: targetId, finished_at: { not: null } },
+    orderBy: { id: "desc" },
+    select: { id: true },
+  });
   return r?.id ?? null;
 }
 
-export function listTargets(): TargetSummary[] {
-  const targets = db.prepare(`SELECT * FROM targets ORDER BY id DESC`).all() as {
-    id: number; name: string; url: string; schema_json: string;
-  }[];
-
-  return targets.map((t) => {
-    const runId = latestRunId(t.id);
-    const variantCount = (
-      db.prepare(`SELECT COUNT(*) n FROM variants WHERE target_id = ? AND status = 'active'`).get(t.id) as { n: number }
-    ).n;
-    const runCount = (
-      db.prepare(`SELECT COUNT(*) n FROM runs WHERE target_id = ? AND finished_at IS NOT NULL`).get(t.id) as { n: number }
-    ).n;
-    const healApproved = (
-      db.prepare(
-        `SELECT COUNT(*) n FROM heal_events h JOIN variants v ON v.id = h.variant_id
-         WHERE v.target_id = ? AND h.verdict = 'approved'`
-      ).get(t.id) as { n: number }
-    ).n;
-
-    let health: TargetSummary["health"] = "pending";
-    let consensusRows = 0;
-    let lastRunAt: string | null = null;
-
-    if (runId) {
-      const run = db.prepare(`SELECT started_at, consensus_json FROM runs WHERE id = ?`).get(runId) as {
-        started_at: string; consensus_json: string | null;
-      };
-      lastRunAt = run.started_at;
-      consensusRows = run.consensus_json ? (JSON.parse(run.consensus_json) as Row[]).length : 0;
-      const statuses = db
-        .prepare(`SELECT status FROM variant_results WHERE run_id = ?`)
-        .all(runId) as { status: string }[];
-      const broken = statuses.filter((s) => s.status === "broken").length;
-      const dissenting = statuses.filter((s) => s.status === "dissenting").length;
-      health = consensusRows === 0 || broken >= 2 ? "down" : broken + dissenting > 0 ? "degraded" : "healthy";
-    }
-
-    return {
-      id: t.id,
-      name: t.name,
-      url: t.url,
-      schema: JSON.parse(t.schema_json),
-      variantCount,
-      health,
-      lastRunAt,
-      consensusRows,
-      runCount,
-      healApproved,
-    };
-  });
+async function runStatuses(runId: number): Promise<string[]> {
+  const rows = await prisma.variantResult.findMany({ where: { run_id: runId }, select: { status: true } });
+  return rows.map((r) => r.status);
 }
 
-export function getTargetDetail(name: string): TargetDetail | undefined {
-  const summary = listTargets().find((t) => t.name === name);
+export async function listTargets(): Promise<TargetSummary[]> {
+  const targets = await prisma.target.findMany({ orderBy: { id: "desc" } });
+
+  return Promise.all(
+    targets.map(async (t) => {
+      const runId = await latestRunId(t.id);
+      const variantCount = await prisma.variant.count({ where: { target_id: t.id, status: "active" } });
+      const runCount = await prisma.run.count({ where: { target_id: t.id, finished_at: { not: null } } });
+      const healApproved = await prisma.healEvent.count({
+        where: { verdict: "approved", variant: { target_id: t.id } },
+      });
+
+      let health: TargetSummary["health"] = "pending";
+      let consensusRows = 0;
+      let lastRunAt: string | null = null;
+
+      if (runId) {
+        const run = await prisma.run.findUniqueOrThrow({
+          where: { id: runId },
+          select: { started_at: true, consensus_json: true },
+        });
+        lastRunAt = run.started_at.toISOString();
+        consensusRows = run.consensus_json ? (JSON.parse(run.consensus_json) as Row[]).length : 0;
+        const statuses = await runStatuses(runId);
+        const broken = statuses.filter((s) => s === "broken").length;
+        const dissenting = statuses.filter((s) => s === "dissenting").length;
+        health = consensusRows === 0 || broken >= 2 ? "down" : broken + dissenting > 0 ? "degraded" : "healthy";
+      }
+
+      return {
+        id: t.id,
+        name: t.name,
+        url: t.url,
+        schema: JSON.parse(t.schema_json) as TargetSchema,
+        variantCount,
+        health,
+        lastRunAt,
+        consensusRows,
+        runCount,
+        healApproved,
+      };
+    })
+  );
+}
+
+export async function getTargetDetail(name: string): Promise<TargetDetail | undefined> {
+  const summary = (await listTargets()).find((t) => t.name === name);
   if (!summary) return undefined;
 
-  const runId = latestRunId(summary.id);
-  const variantRows = db
-    .prepare(`SELECT * FROM variants WHERE target_id = ? AND status = 'active' ORDER BY id`)
-    .all(summary.id) as { id: number; collector_id: string; strategy: VariantStrategy; status: string }[];
-
-  const variants: VariantView[] = variantRows.map((v) => {
-    const res = runId
-      ? (db
-          .prepare(`SELECT status, dissents_json, error FROM variant_results WHERE run_id = ? AND variant_id = ?`)
-          .get(runId, v.id) as { status: string; dissents_json: string; error: string | null } | undefined)
-      : undefined;
-    return {
-      id: v.id,
-      collector_id: v.collector_id,
-      strategy: v.strategy,
-      status: v.status,
-      lastRunStatus: res?.status ?? null,
-      dissentCount: res ? (JSON.parse(res.dissents_json) as string[]).length : 0,
-      error: res?.error ?? null,
-    };
+  const runId = await latestRunId(summary.id);
+  const variantRows = await prisma.variant.findMany({
+    where: { target_id: summary.id, status: "active" },
+    orderBy: { id: "asc" },
   });
+
+  const variants: VariantView[] = await Promise.all(
+    variantRows.map(async (v) => {
+      const res = runId
+        ? await prisma.variantResult.findFirst({
+            where: { run_id: runId, variant_id: v.id },
+            select: { status: true, dissents_json: true, error: true },
+          })
+        : null;
+      return {
+        id: v.id,
+        collector_id: v.collector_id,
+        strategy: v.strategy as VariantStrategy,
+        status: v.status,
+        lastRunStatus: res?.status ?? null,
+        dissentCount: res?.dissents_json ? (JSON.parse(res.dissents_json) as string[]).length : 0,
+        error: res?.error ?? null,
+      };
+    })
+  );
 
   let consensus: Row[] = [];
   let votes: VoteView[] = [];
   if (runId) {
-    const run = db.prepare(`SELECT consensus_json FROM runs WHERE id = ?`).get(runId) as {
-      consensus_json: string | null;
-    };
+    const run = await prisma.run.findUniqueOrThrow({ where: { id: runId }, select: { consensus_json: true } });
     consensus = run.consensus_json ? JSON.parse(run.consensus_json) : [];
-    votes = (
-      db.prepare(`SELECT row_key, field, consensus_value, dissenting_json FROM votes WHERE run_id = ?`).all(runId) as {
-        row_key: string; field: string; consensus_value: string; dissenting_json: string;
-      }[]
-    ).map((v) => ({
+    const voteRows = await prisma.vote.findMany({ where: { run_id: runId } });
+    votes = voteRows.map((v) => ({
       rowKey: v.row_key,
       field: v.field,
-      consensusValue: JSON.parse(v.consensus_value),
-      dissenting: JSON.parse(v.dissenting_json),
+      consensusValue: v.consensus_value ? JSON.parse(v.consensus_value) : null,
+      dissenting: v.dissenting_json ? JSON.parse(v.dissenting_json) : [],
     }));
   }
 
-  const heals = db
-    .prepare(
-      `SELECT h.id, h.variant_id as variantId, v.strategy, h.prompt, h.verdict, h.verdict_reason, h.verification, h.started_at, h.decided_at
-       FROM heal_events h JOIN variants v ON v.id = h.variant_id
-       WHERE v.target_id = ? ORDER BY h.id DESC LIMIT 20`
-    )
-    .all(summary.id) as HealView[];
+  const healRows = await prisma.healEvent.findMany({
+    where: { variant: { target_id: summary.id } },
+    include: { variant: { select: { strategy: true } } },
+    orderBy: { id: "desc" },
+    take: 20,
+  });
+  const heals: HealView[] = healRows.map((h) => ({
+    id: h.id,
+    variantId: h.variant_id,
+    strategy: h.variant.strategy,
+    prompt: h.prompt,
+    verdict: h.verdict ?? "pending",
+    verdict_reason: h.verdict_reason,
+    verification: h.verification,
+    started_at: h.started_at.toISOString(),
+    decided_at: h.decided_at ? h.decided_at.toISOString() : null,
+  }));
 
-  const history = (
-    db
-      .prepare(`SELECT id, started_at FROM runs WHERE target_id = ? AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 12`)
-      .all(summary.id) as { id: number; started_at: string }[]
-  )
-    .reverse()
-    .map((r) => {
-      const statuses = db.prepare(`SELECT status FROM variant_results WHERE run_id = ?`).all(r.id) as {
-        status: string;
-      }[];
+  const historyRuns = await prisma.run.findMany({
+    where: { target_id: summary.id, finished_at: { not: null } },
+    orderBy: { id: "desc" },
+    take: 12,
+    select: { id: true, started_at: true },
+  });
+  const history = await Promise.all(
+    historyRuns.reverse().map(async (r) => {
+      const statuses = await runStatuses(r.id);
       return {
         runId: r.id,
-        startedAt: r.started_at,
-        healthy: statuses.filter((s) => s.status === "healthy").length,
-        dissenting: statuses.filter((s) => s.status === "dissenting").length,
-        broken: statuses.filter((s) => s.status === "broken").length,
+        startedAt: r.started_at.toISOString(),
+        healthy: statuses.filter((s) => s === "healthy").length,
+        dissenting: statuses.filter((s) => s === "dissenting").length,
+        broken: statuses.filter((s) => s === "broken").length,
       };
-    });
+    })
+  );
 
   return { ...summary, variants, consensus, votes, heals, runId, history };
 }

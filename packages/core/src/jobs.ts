@@ -1,20 +1,7 @@
-import { db } from "./db.ts";
+import { prisma } from "./prisma.ts";
 
 export type JobKind = "flock" | "run";
 export type JobStatus = "running" | "done" | "error";
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS jobs (
-  id INTEGER PRIMARY KEY,
-  kind TEXT NOT NULL,
-  target_name TEXT NOT NULL,
-  status TEXT NOT NULL,
-  log_json TEXT NOT NULL DEFAULT '[]',
-  error TEXT,
-  created_at TEXT DEFAULT (datetime('now')),
-  finished_at TEXT
-);
-`);
 
 export interface JobRecord {
   id: number;
@@ -27,60 +14,86 @@ export interface JobRecord {
   finished_at: string | null;
 }
 
-export function createJob(kind: JobKind, targetName: string): number {
-  const r = db
-    .prepare(`INSERT INTO jobs (kind, target_name, status) VALUES (?, ?, 'running')`)
-    .run(kind, targetName);
-  return Number(r.lastInsertRowid);
+type JobRow = {
+  id: number;
+  kind: string;
+  target_name: string;
+  status: string;
+  log_json: string;
+  error: string | null;
+  created_at: Date;
+  finished_at: Date | null;
+};
+
+function toRecord(r: JobRow): JobRecord {
+  return {
+    id: r.id,
+    kind: r.kind as JobKind,
+    target_name: r.target_name,
+    status: r.status as JobStatus,
+    log: JSON.parse(r.log_json),
+    error: r.error,
+    created_at: r.created_at.toISOString(),
+    finished_at: r.finished_at ? r.finished_at.toISOString() : null,
+  };
 }
+
+export async function createJob(kind: JobKind, targetName: string): Promise<number> {
+  const r = await prisma.job.create({ data: { kind, target_name: targetName, status: "running" } });
+  return r.id;
+}
+
+// Appends are read-modify-write; serialize them per job so concurrent
+// (fire-and-forget) log calls cannot drop each other's lines.
+const appendQueues = new Map<number, Promise<void>>();
 
 /** Strips ANSI colour codes so terminal-formatted log lines render cleanly in the browser. */
-export function appendJobLog(jobId: number, line: string): void {
-  const clean = line.replace(/\[[0-9;]*m/g, "");
-  const row = db.prepare(`SELECT log_json FROM jobs WHERE id = ?`).get(jobId) as
-    | { log_json: string }
-    | undefined;
-  if (!row) return;
-  const log = JSON.parse(row.log_json) as string[];
-  log.push(clean);
-  db.prepare(`UPDATE jobs SET log_json = ? WHERE id = ?`).run(JSON.stringify(log), jobId);
-}
-
-export function finishJob(jobId: number, status: JobStatus, error?: string): void {
-  db.prepare(`UPDATE jobs SET status = ?, error = ?, finished_at = datetime('now') WHERE id = ?`).run(
-    status,
-    error ?? null,
-    jobId
+export function appendJobLog(jobId: number, line: string): Promise<void> {
+  const clean = line.replace(/\[[0-9;]*m/g, "");
+  const next = (appendQueues.get(jobId) ?? Promise.resolve()).then(async () => {
+    const row = await prisma.job.findUnique({ where: { id: jobId }, select: { log_json: true } });
+    if (!row) return;
+    const log = JSON.parse(row.log_json) as string[];
+    log.push(clean);
+    await prisma.job.update({ where: { id: jobId }, data: { log_json: JSON.stringify(log) } });
+  });
+  appendQueues.set(
+    jobId,
+    next.catch(() => {})
   );
+  return next;
 }
 
-export function getJob(jobId: number): JobRecord | undefined {
-  const r = db.prepare(`SELECT * FROM jobs WHERE id = ?`).get(jobId) as
-    | (Omit<JobRecord, "log"> & { log_json: string })
-    | undefined;
-  return r ? { ...r, log: JSON.parse(r.log_json) } : undefined;
+export async function finishJob(jobId: number, status: JobStatus, error?: string): Promise<void> {
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { status, error: error ?? null, finished_at: new Date() },
+  });
 }
 
-export function activeJobs(): JobRecord[] {
-  const rows = db
-    .prepare(`SELECT * FROM jobs WHERE status = 'running' ORDER BY id DESC`)
-    .all() as (Omit<JobRecord, "log"> & { log_json: string })[];
-  return rows.map((r) => ({ ...r, log: JSON.parse(r.log_json) }));
+export async function getJob(jobId: number): Promise<JobRecord | undefined> {
+  const r = await prisma.job.findUnique({ where: { id: jobId } });
+  return r ? toRecord(r) : undefined;
 }
 
-export function recentJobs(targetName?: string, limit = 20): JobRecord[] {
-  const rows = (
-    targetName
-      ? db.prepare(`SELECT * FROM jobs WHERE target_name = ? ORDER BY id DESC LIMIT ?`).all(targetName, limit)
-      : db.prepare(`SELECT * FROM jobs ORDER BY id DESC LIMIT ?`).all(limit)
-  ) as (Omit<JobRecord, "log"> & { log_json: string })[];
-  return rows.map((r) => ({ ...r, log: JSON.parse(r.log_json) }));
+export async function activeJobs(): Promise<JobRecord[]> {
+  const rows = await prisma.job.findMany({ where: { status: "running" }, orderBy: { id: "desc" } });
+  return rows.map(toRecord);
+}
+
+export async function recentJobs(targetName?: string, limit = 20): Promise<JobRecord[]> {
+  const rows = await prisma.job.findMany({
+    where: targetName ? { target_name: targetName } : undefined,
+    orderBy: { id: "desc" },
+    take: limit,
+  });
+  return rows.map(toRecord);
 }
 
 /** Marks jobs left "running" by a server restart as failed, so the UI never hangs on a ghost. */
-export function reapStaleJobs(): void {
-  db.prepare(
-    `UPDATE jobs SET status = 'error', error = 'interrupted (server restarted)', finished_at = datetime('now')
-     WHERE status = 'running' AND created_at < datetime('now', '-45 minutes')`
-  ).run();
+export async function reapStaleJobs(): Promise<void> {
+  await prisma.job.updateMany({
+    where: { status: "running", created_at: { lt: new Date(Date.now() - 45 * 60_000) } },
+    data: { status: "error", error: "interrupted (server restarted)", finished_at: new Date() },
+  });
 }

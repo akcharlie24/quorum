@@ -1,71 +1,5 @@
-import Database from "better-sqlite3";
-import { join } from "node:path";
-import { REPO_ROOT } from "./env.ts";
+import { prisma } from "./prisma.ts";
 import type { TargetSchema, VariantStrategy } from "./types.ts";
-
-const db = new Database(join(REPO_ROOT, "silk.db"));
-db.pragma("journal_mode = WAL");
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS targets (
-  id INTEGER PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  url TEXT NOT NULL,
-  schema_json TEXT NOT NULL,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS variants (
-  id INTEGER PRIMARY KEY,
-  target_id INTEGER NOT NULL REFERENCES targets(id),
-  collector_id TEXT NOT NULL,
-  strategy TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'active',
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE TABLE IF NOT EXISTS runs (
-  id INTEGER PRIMARY KEY,
-  target_id INTEGER NOT NULL REFERENCES targets(id),
-  started_at TEXT NOT NULL,
-  finished_at TEXT,
-  consensus_json TEXT
-);
-CREATE TABLE IF NOT EXISTS variant_results (
-  id INTEGER PRIMARY KEY,
-  run_id INTEGER NOT NULL REFERENCES runs(id),
-  variant_id INTEGER NOT NULL REFERENCES variants(id),
-  status TEXT NOT NULL,
-  rows_json TEXT,
-  error TEXT,
-  dissents_json TEXT
-);
-CREATE TABLE IF NOT EXISTS votes (
-  id INTEGER PRIMARY KEY,
-  run_id INTEGER NOT NULL REFERENCES runs(id),
-  row_key TEXT NOT NULL,
-  field TEXT NOT NULL,
-  consensus_value TEXT,
-  dissenting_json TEXT
-);
-CREATE TABLE IF NOT EXISTS heal_events (
-  id INTEGER PRIMARY KEY,
-  variant_id INTEGER NOT NULL REFERENCES variants(id),
-  trigger_run_id INTEGER REFERENCES runs(id),
-  prompt TEXT NOT NULL,
-  preview_json TEXT,
-  verdict TEXT,            -- approved | rejected | needs_human | pending
-  verdict_reason TEXT,
-  started_at TEXT DEFAULT (datetime('now')),
-  decided_at TEXT
-);
-`);
-
-// An approved heal is provisional until the repaired scraper proves itself on a
-// real run: Bright Data's preview can look perfect while the deployed code still fails.
-try {
-  db.exec(`ALTER TABLE heal_events ADD COLUMN verification TEXT`);
-} catch {
-  /* column already present */
-}
 
 export interface TargetRecord {
   id: number;
@@ -82,37 +16,40 @@ export interface VariantRecord {
   status: string;
 }
 
-export function upsertTarget(name: string, url: string, schema: TargetSchema): TargetRecord {
-  db.prepare(
-    `INSERT INTO targets (name, url, schema_json) VALUES (?, ?, ?)
-     ON CONFLICT(name) DO UPDATE SET url = excluded.url, schema_json = excluded.schema_json`
-  ).run(name, url, JSON.stringify(schema));
-  return getTarget(name)!;
+const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
+
+export async function upsertTarget(name: string, url: string, schema: TargetSchema): Promise<TargetRecord> {
+  const r = await prisma.target.upsert({
+    where: { name },
+    create: { name, url, schema_json: JSON.stringify(schema) },
+    update: { url, schema_json: JSON.stringify(schema) },
+  });
+  return { id: r.id, name: r.name, url: r.url, schema: JSON.parse(r.schema_json) };
 }
 
-export function getTarget(name: string): TargetRecord | undefined {
-  const r = db.prepare(`SELECT * FROM targets WHERE name = ?`).get(name) as
-    | { id: number; name: string; url: string; schema_json: string }
-    | undefined;
+export async function getTarget(name: string): Promise<TargetRecord | undefined> {
+  const r = await prisma.target.findUnique({ where: { name } });
   return r ? { id: r.id, name: r.name, url: r.url, schema: JSON.parse(r.schema_json) } : undefined;
 }
 
-export function addVariant(targetId: number, collectorId: string, strategy: VariantStrategy): void {
-  db.prepare(`INSERT INTO variants (target_id, collector_id, strategy) VALUES (?, ?, ?)`).run(
-    targetId,
-    collectorId,
-    strategy
-  );
+export async function addVariant(
+  targetId: number,
+  collectorId: string,
+  strategy: VariantStrategy
+): Promise<void> {
+  await prisma.variant.create({ data: { target_id: targetId, collector_id: collectorId, strategy } });
 }
 
 /**
  * Retires a target's current variants so a rebuilt Flock replaces them.
  * Rows are kept, not deleted — past runs and heal history must stay readable.
  */
-export function retireVariants(targetId: number): number {
-  return db
-    .prepare(`UPDATE variants SET status = 'retired' WHERE target_id = ? AND status = 'active'`)
-    .run(targetId).changes;
+export async function retireVariants(targetId: number): Promise<number> {
+  const r = await prisma.variant.updateMany({
+    where: { target_id: targetId, status: "active" },
+    data: { status: "retired" },
+  });
+  return r.count;
 }
 
 /**
@@ -120,106 +57,133 @@ export function retireVariants(targetId: number): number {
  * Healing rewrites extraction logic; it cannot undo a collector that was generated
  * to crawl detail pages. When a fix regresses, replacing the scraper is the cure.
  */
-export function retireVariant(variantId: number): void {
-  db.prepare(`UPDATE variants SET status = 'retired' WHERE id = ?`).run(variantId);
+export async function retireVariant(variantId: number): Promise<void> {
+  await prisma.variant.updateMany({ where: { id: variantId }, data: { status: "retired" } });
 }
 
-export function getVariants(targetId: number): VariantRecord[] {
-  return db
-    .prepare(`SELECT * FROM variants WHERE target_id = ? AND status = 'active'`)
-    .all(targetId) as VariantRecord[];
+export async function getVariants(targetId: number): Promise<VariantRecord[]> {
+  const rows = await prisma.variant.findMany({ where: { target_id: targetId, status: "active" } });
+  return rows.map((v) => ({
+    id: v.id,
+    target_id: v.target_id,
+    collector_id: v.collector_id,
+    strategy: v.strategy as VariantStrategy,
+    status: v.status,
+  }));
 }
 
-export function startRun(targetId: number): number {
-  const r = db
-    .prepare(`INSERT INTO runs (target_id, started_at) VALUES (?, datetime('now'))`)
-    .run(targetId);
-  return Number(r.lastInsertRowid);
+export async function startRun(targetId: number): Promise<number> {
+  const r = await prisma.run.create({ data: { target_id: targetId, started_at: new Date() } });
+  return r.id;
 }
 
-export function finishRun(runId: number, consensusRows: unknown[]): void {
-  db.prepare(`UPDATE runs SET finished_at = datetime('now'), consensus_json = ? WHERE id = ?`).run(
-    JSON.stringify(consensusRows),
-    runId
-  );
+export async function finishRun(runId: number, consensusRows: unknown[]): Promise<void> {
+  await prisma.run.update({
+    where: { id: runId },
+    data: { finished_at: new Date(), consensus_json: JSON.stringify(consensusRows) },
+  });
 }
 
-export function recordVariantResult(
+export async function recordVariantResult(
   runId: number,
   variantId: number,
   status: string,
   rows: unknown[],
   error: string | undefined,
   dissents: string[]
-): void {
-  db.prepare(
-    `INSERT INTO variant_results (run_id, variant_id, status, rows_json, error, dissents_json)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(runId, variantId, status, JSON.stringify(rows), error ?? null, JSON.stringify(dissents));
+): Promise<void> {
+  await prisma.variantResult.create({
+    data: {
+      run_id: runId,
+      variant_id: variantId,
+      status,
+      rows_json: JSON.stringify(rows),
+      error: error ?? null,
+      dissents_json: JSON.stringify(dissents),
+    },
+  });
 }
 
-export function recordVote(
+export async function recordVote(
   runId: number,
   rowKey: string,
   field: string,
   consensusValue: unknown,
   dissenting: unknown[]
-): void {
-  db.prepare(
-    `INSERT INTO votes (run_id, row_key, field, consensus_value, dissenting_json) VALUES (?, ?, ?, ?, ?)`
-  ).run(runId, rowKey, field, JSON.stringify(consensusValue ?? null), JSON.stringify(dissenting));
+): Promise<void> {
+  await prisma.vote.create({
+    data: {
+      run_id: runId,
+      row_key: rowKey,
+      field,
+      consensus_value: JSON.stringify(consensusValue ?? null),
+      dissenting_json: JSON.stringify(dissenting),
+    },
+  });
 }
 
-export function startHealEvent(variantId: number, triggerRunId: number, prompt: string): number {
-  const r = db
-    .prepare(
-      `INSERT INTO heal_events (variant_id, trigger_run_id, prompt, verdict) VALUES (?, ?, ?, 'pending')`
-    )
-    .run(variantId, triggerRunId, prompt);
-  return Number(r.lastInsertRowid);
+export async function startHealEvent(variantId: number, triggerRunId: number, prompt: string): Promise<number> {
+  const r = await prisma.healEvent.create({
+    data: { variant_id: variantId, trigger_run_id: triggerRunId, prompt, verdict: "pending" },
+  });
+  return r.id;
 }
 
-export function decideHealEvent(
+export async function decideHealEvent(
   healId: number,
   verdict: "approved" | "rejected" | "needs_human",
   reason: string,
   preview: unknown[]
-): void {
-  db.prepare(
-    `UPDATE heal_events SET verdict = ?, verdict_reason = ?, preview_json = ?, decided_at = datetime('now') WHERE id = ?`
-  ).run(verdict, reason, JSON.stringify(preview), healId);
+): Promise<void> {
+  await prisma.healEvent.update({
+    where: { id: healId },
+    data: { verdict, verdict_reason: reason, preview_json: JSON.stringify(preview), decided_at: new Date() },
+  });
 }
 
 /** Approved heals that have not yet been confirmed against a live run. */
-export function unverifiedHeals(targetId: number): { id: number; variant_id: number }[] {
-  return db
-    .prepare(
-      `SELECT h.id, h.variant_id FROM heal_events h JOIN variants v ON v.id = h.variant_id
-       WHERE v.target_id = ? AND h.verdict = 'approved' AND h.verification IS NULL`
-    )
-    .all(targetId) as { id: number; variant_id: number }[];
+export async function unverifiedHeals(targetId: number): Promise<{ id: number; variant_id: number }[]> {
+  return prisma.healEvent.findMany({
+    where: { verdict: "approved", verification: null, variant: { target_id: targetId } },
+    select: { id: true, variant_id: true },
+  });
 }
 
-export function setHealVerification(healId: number, status: "verified" | "regressed", note: string): void {
-  db.prepare(`UPDATE heal_events SET verification = ?, verdict_reason = verdict_reason || ' | ' || ? WHERE id = ?`)
-    .run(status, note, healId);
+export async function setHealVerification(
+  healId: number,
+  status: "verified" | "regressed",
+  note: string
+): Promise<void> {
+  const heal = await prisma.healEvent.findUnique({ where: { id: healId }, select: { verdict_reason: true } });
+  if (!heal) return;
+  await prisma.healEvent.update({
+    where: { id: healId },
+    data: { verification: status, verdict_reason: `${heal.verdict_reason ?? ""} | ${note}` },
+  });
 }
 
-export function lastRuns(targetId: number, limit = 10) {
-  return db
-    .prepare(`SELECT * FROM runs WHERE target_id = ? ORDER BY id DESC LIMIT ?`)
-    .all(targetId, limit);
+export async function lastRuns(targetId: number, limit = 10) {
+  const rows = await prisma.run.findMany({
+    where: { target_id: targetId },
+    orderBy: { id: "desc" },
+    take: limit,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    target_id: r.target_id,
+    started_at: r.started_at.toISOString(),
+    finished_at: iso(r.finished_at),
+    consensus_json: r.consensus_json,
+  }));
 }
 
-export function pendingHeals(): unknown[] {
-  return db.prepare(`SELECT * FROM heal_events WHERE verdict = 'pending'`).all();
+export async function pendingHeals(): Promise<unknown[]> {
+  return prisma.healEvent.findMany({ where: { verdict: "pending" } });
 }
 
-export function allTargets(): TargetRecord[] {
-  const rows = db.prepare(`SELECT * FROM targets`).all() as {
-    id: number; name: string; url: string; schema_json: string;
-  }[];
+export async function allTargets(): Promise<TargetRecord[]> {
+  const rows = await prisma.target.findMany();
   return rows.map((r) => ({ id: r.id, name: r.name, url: r.url, schema: JSON.parse(r.schema_json) }));
 }
 
-export { db };
+export { prisma };

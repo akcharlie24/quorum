@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 export default {
   transpilePackages: ["@silk/core"],
-  serverExternalPackages: ["better-sqlite3"],
+  serverExternalPackages: ["@prisma/adapter-pg", "pg"],
 
   // @silk/core is NodeNext TypeScript: its relative imports carry .js extensions
   // that must resolve to .ts sources. Turbopack (the Next 16 default) does this
