@@ -1,4 +1,4 @@
-import type { TargetSchema, VariantStrategy } from "./types.js";
+import type { TargetSchema, VariantStrategy } from "./types.ts";
 
 /**
  * Bright Data rejects `scraper create` with 400 "Invalid description" past roughly this

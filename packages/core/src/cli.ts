@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import pc from "picocolors";
-import { loadEnv } from "./env.js";
-import { createScraper } from "./brightdata.js";
+import { loadEnv } from "./env.ts";
+import { createScraper } from "./brightdata.ts";
 import {
   addVariant,
   allTargets,
@@ -10,10 +10,10 @@ import {
   lastRuns,
   pendingHeals,
   upsertTarget,
-} from "./db.js";
-import { runCycle } from "./runner.js";
-import { strategyPrompts } from "./strategies.js";
-import type { TargetSchema, VariantStrategy } from "./types.js";
+} from "./db.ts";
+import { runCycle } from "./runner.ts";
+import { strategyPrompts } from "./strategies.ts";
+import type { TargetSchema, VariantStrategy } from "./types.ts";
 
 loadEnv();
 

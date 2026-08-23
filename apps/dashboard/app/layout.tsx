@@ -1,32 +1,18 @@
 import type { Metadata } from "next";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SILK — Flock Control",
-  description: "The immune system for web scrapers.",
+  title: "Quorum — no single scraper is trusted",
+  description:
+    "Quorum runs three independently-written scrapers against every URL and ships only what they agree on — catching the silent breakages a lone scraper never reports, and grading every self-healing repair before it goes live.",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <div className="shell">
-          <header className="topbar">
-            <a href="/" className="brand">
-              <div className="brand-mark">🕷</div>
-              <div>
-                <h1>SILK</h1>
-                <div className="tag">THE IMMUNE SYSTEM FOR WEB SCRAPERS</div>
-              </div>
-            </a>
-            <nav className="topnav">
-              <a href="/">Flocks</a>
-              <a href="/how-it-works">How it works</a>
-            </nav>
-          </header>
-          {children}
-        </div>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

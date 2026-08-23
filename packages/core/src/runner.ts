@@ -1,5 +1,5 @@
 import pc from "picocolors";
-import { classifyError, runScraper } from "./brightdata.js";
+import { classifyError, runScraper } from "./brightdata.ts";
 import {
   finishRun,
   getVariants,
@@ -7,10 +7,10 @@ import {
   recordVote,
   startRun,
   type TargetRecord,
-} from "./db.js";
-import { consensus, normalizeRows } from "./consensus.js";
-import { healAndDecide } from "./healer.js";
-import type { ConsensusResult } from "./types.js";
+} from "./db.ts";
+import { consensus, normalizeRows } from "./consensus.ts";
+import { healAndDecide } from "./healer.ts";
+import type { ConsensusResult } from "./types.ts";
 
 const STATUS_ICON = { healthy: pc.green("●"), dissenting: pc.yellow("◐"), broken: pc.red("○") };
 

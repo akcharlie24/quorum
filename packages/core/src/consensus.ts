@@ -4,7 +4,7 @@ import type {
   TargetSchema,
   VariantRunResult,
   VoteRecord,
-} from "./types.js";
+} from "./types.ts";
 
 const NUM_TOLERANCE = 0.011; // price cents tolerance
 

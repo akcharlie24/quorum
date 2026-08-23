@@ -1,5 +1,5 @@
-import { db } from "./db.js";
-import type { Row, TargetSchema, VariantStrategy } from "./types.js";
+import { db } from "./db.ts";
+import type { Row, TargetSchema, VariantStrategy } from "./types.ts";
 
 export interface VariantView {
   id: number;

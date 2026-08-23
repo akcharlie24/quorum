@@ -1,8 +1,8 @@
-# 🕷️ SILK — The Immune System for Web Scrapers
+# ◎ QUORUM — No Single Scraper Is Trusted
 
 > **Scrape-Verse Hackathon (WeMakeDevs × Bright Data) — deadline Aug 23, 2026**
-> Working name: **SILK** (alternatives: WebWeaver, SpiderNet — decide before submission).
-> UI theme: **Spider-Man** (matches the hackathon's Web-Slinger / Spider-Sense / Daily Bugle tracks).
+> Product name: **QUORUM** (was SILK — renamed 2026-08-23; internal package names stay `@silk/*`).
+> UI theme: light, technical-drawing — paper ground, hairline rules, zero radius, hand-drawn annotations.
 
 ---
 
@@ -148,6 +148,20 @@ Lead with the **real product on a real site**. The Breakage Lab appears only as 
 - **Docs vs kickoff-blog drift** (blog says `bdata`, docs say `brightdata` — verified: both work, same binary).
 
 ## 11. Status Log
+
+- **2026-08-23 (later):** UI follow-ups plus a stack upgrade, still on `ui-tweaks`.
+  - **Stack:** Next **16.3.2** on Turbopack (was 15 on webpack), React 19.2, **Tailwind CSS v4** and **shadcn/ui** primitives (Radix Select + Tooltip, `cn()`, CVA, lucide-react, `tw-animate-css`). The hand-authored design system moved to `app/design-system.css` and is imported `layer(components)`, with its tokens re-exported through `@theme inline` — so Tailwind utilities (in `@layer utilities`) override component CSS without `!important`, and every colour still has one source of truth.
+  - **`packages/core` relative imports now name `.ts`, not `.js`.** Turbopack has no equivalent of webpack's `extensionAlias`, and core's NodeNext-style `./x.js` specifiers pointed at files that do not exist on disk. Core is never compiled (tsx for the CLI, bundled by Next), so `allowImportingTsExtensions` is the honest fix. 12/12 tests and the `silk` CLI verified unchanged.
+  - **Run history redesigned** as a proper stacked column chart (`components/run-history.tsx`): status palette validated for CVD separation, hairline gridlines, 24px-capped bars with a 2px surface gap between segments, ticks centred on their gridline, a labelled legend, per-cycle hover/focus tooltips, and a screen-reader table so no value is gated behind hover.
+  - **Bugs fixed:** `.site-links a` (specificity 0,1,1) was outranking `.btn`, flattening the nav CTA's padding to `3px 0` *and* replacing its hover fill with an underline — now scoped `:not(.btn)`. The `.plus-corners` registration marks were rebuilt: an absolutely-positioned pseudo lays out against the *padding* box, so the panel's 1px border pushed every mark a pixel off-centre, and drawing them in `rgba(32,30,42,.55)` against a solid-ink border made each corner read as two misregistered lines with arms poking into the panel. They now offset by `arm − border-width` and wear `--line-ink`, so a corner is one continuous cross — the panel's own rules overshooting by 6px. The hero diagram's scraper→vote connectors swapped `strokeDasharray` mid-phase and jumped twice; they are now two stacked paths where only opacity animates. The logomark is `overflow: visible` so its hover pulse is not clipped, and the nav logo scrolls home smoothly instead of re-navigating.
+
+- **2026-08-23:** **Renamed SILK → QUORUM** and rebuilt the front end light-mode on branch `ui-tweaks`.
+  - The name is the mechanic: a quorum is the minimum agreement that makes a decision valid — exactly "at least 2 of 3 must agree." The codebase already spoke this language (`verdict`, `dissenting`, majority vote, approve/reject), so the brand now matches the engine. Logomark: three overlapping circles with a solid dot where all three meet. Only the **user-facing** surface was renamed — npm workspaces stay `@silk/*`, the CLI stays `silk`, the DB stays `silk.db`, so nothing in the pipeline had to change.
+  - **New marketing landing page at `/`**; the console moved to `/dashboard`, with `/flock/[name]` and `/how-it-works` unchanged and now inside an `(app)` route group that owns the console chrome.
+  - **Design system rewritten** (`app/globals.css`, ~540 lines) in a light technical-drawing register — paper `#efefec` ground, ink `#201e2a`, zero border radius, hairline lattices, corner registration marks, halftone/dot textures, hexagonal status tags. Type: Space Grotesk display · DM Sans body · JetBrains Mono labels · Caveat for hand annotations, loaded by CSS `@import` so a build never depends on the font CDN.
+  - **Five original SVG illustrations**, all reused between the landing page and the console so the marketing claims and the product are literally the same drawings: the animated six-phase consensus engine (hero), the three extraction philosophies as page wireframes, the silent-drift chart, the verified-healing loop, and the survival-per-mutation bars.
+  - Animations are subtle and everywhere: scroll reveals, marching-ants on disputed cells, drawn SVG strokes, a marquee of live targets, count-ups, hover lifts with hard offset shadows, and a `prefers-reduced-motion` block that disables all of it.
+  - Console behaviour is untouched — same polling, same API routes, same job/orchestrator flow. Typecheck and `next build` clean.
 
 - **2026-08-22 (am):** Idea locked (Flock + Spider-Sense + Volatility Index = SILK). PROJECT.md created.
 - **2026-08-22 (pm):** Verified real BD CLI surface from docs — `scraper create/run/heal/approve` with approval gate + `--reject`; SILK's consensus becomes the programmatic approval brain (stronger than planned!). Build order flipped per Akshat: **Flock (Layer 2) first**, incl. demo-target site; Spider-Sense + Bugle after. Waiting on: BD API token to start `scraper create` bakes.

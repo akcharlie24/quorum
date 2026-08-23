@@ -1,8 +1,8 @@
 import pc from "picocolors";
-import { approveHeal, healScraper, sanitizePrompt } from "./brightdata.js";
-import { decideHealEvent, startHealEvent, type TargetRecord, type VariantRecord } from "./db.js";
-import { consensus, normalizeRows } from "./consensus.js";
-import type { Row, VariantRunResult } from "./types.js";
+import { approveHeal, healScraper, sanitizePrompt } from "./brightdata.ts";
+import { decideHealEvent, startHealEvent, type TargetRecord, type VariantRecord } from "./db.ts";
+import { consensus, normalizeRows } from "./consensus.ts";
+import type { Row, VariantRunResult } from "./types.ts";
 
 const APPROVE_THRESHOLD = 0.9;
 

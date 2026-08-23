@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useState, use } from "react";
 import type { JobRecord, TargetDetail } from "@silk/core";
 import { STRATEGY_BLURB, STRATEGY_LABEL } from "@silk/core/browser";
+
 import { logClass, timeAgo } from "@/lib/format";
+import { Reveal } from "@/components/reveal";
+import { RunHistory } from "@/components/run-history";
 
 const STATUS_PILL: Record<string, string> = {
   healthy: "pill-healthy",
@@ -45,7 +48,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
     setStarting(false);
   }
 
-  if (missing) return <div className="panel empty">No Flock named “{target}”.</div>;
+  if (missing) return <div className="panel empty">No flock named “{target}”.</div>;
   if (!detail) return <div className="empty"><span className="spinner" />Loading…</div>;
 
   const activeJob = jobs.find((j) => j.status === "running");
@@ -54,7 +57,6 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
   const disputedCells = new Set(detail.votes.map((v) => `${v.rowKey}::${v.field}`));
   const keyField = detail.schema.keyField;
 
-  // rowKey as stored by the consensus engine (lowercased, whitespace-collapsed)
   const rowKeyOf = (row: Record<string, unknown>) =>
     String(row[keyField] ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 
@@ -66,11 +68,25 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
 
   return (
     <>
-      <div className="section-head" style={{ alignItems: "center", marginBottom: 18 }}>
+      <div className="crumb">
+        <a href="/dashboard">FLOCKS</a>
+        <span>/</span>
+        <span style={{ color: "var(--ink-3)" }}>{detail.name.toUpperCase()}</span>
+      </div>
+
+      <div className="section-head" style={{ alignItems: "center", marginBottom: 22 }}>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 660, letterSpacing: "-0.3px" }}>{detail.name}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <h2 style={{ fontSize: 26 }}>{detail.name}</h2>
             <span className={`pill pill-${detail.health}`}>{detail.health}</span>
+            {activeJob && (
+              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span className="live-dot" />
+                <span className="mono" style={{ fontSize: 10, letterSpacing: ".1em", color: "var(--ink-3)" }}>
+                  CYCLE RUNNING
+                </span>
+              </span>
+            )}
           </div>
           <a className="sub mono faint" href={detail.url} target="_blank" rel="noreferrer">
             {detail.url} ↗
@@ -78,10 +94,17 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn btn-ghost btn-sm" disabled={!!activeJob || starting} onClick={() => runCycle(false)}>
-            Scrape only
+            <span>Scrape only</span>
           </button>
           <button className="btn btn-sm" disabled={!!activeJob || starting} onClick={() => runCycle(true)}>
-            {activeJob ? <><span className="spinner" />Running…</> : "▶ Run cycle"}
+            {activeJob ? (
+              <span><span className="spinner" />Running…</span>
+            ) : (
+              <>
+                <span>Run cycle</span>
+                <span className="arrow">→</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -89,38 +112,42 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
       {detail.variants.length === 0 && (
         <div className="banner banner-info">
           <span className="spinner" />
-          Bright Data is still building this Flock&apos;s scrapers. This page updates itself.
+          Bright Data is still writing this flock&apos;s scrapers. This page updates itself.
         </div>
       )}
 
-      {/* ---- the flock ---- */}
-      <div className="section" style={{ marginTop: 4 }}>
+      <div className="section" style={{ marginTop: 8 }}>
         <div className="section-head">
-          <div className="h2">The Flock</div>
-          <div className="sub faint">Three extraction philosophies — so one site change can&apos;t kill them all.</div>
+          <div>
+            <span className="eyebrow no-rule">The flock</span>
+            <div className="h2" style={{ marginTop: 6 }}>Three extraction philosophies</div>
+          </div>
+          <div className="sub faint">So one site change can&apos;t kill them all.</div>
         </div>
-        <div className="grid grid-3">
-          {detail.variants.map((v) => (
-            <div className={`vcard is-${v.lastRunStatus ?? "pending"}`} key={v.id}>
-              <div className="vcard-top">
-                <h4>{STRATEGY_LABEL[v.strategy] ?? v.strategy}</h4>
-                {v.lastRunStatus ? (
-                  <span className={`pill ${STATUS_PILL[v.lastRunStatus]}`}>{v.lastRunStatus}</span>
-                ) : (
-                  <span className="pill pill-pending">no runs</span>
+        <div className="grid grid-3 gap-lg">
+          {detail.variants.map((v, i) => (
+            <Reveal key={v.id} delay={i * 60}>
+              <div className={`vcard is-${v.lastRunStatus ?? "pending"}`}>
+                <div className="vcard-top">
+                  <h4>{STRATEGY_LABEL[v.strategy] ?? v.strategy}</h4>
+                  {v.lastRunStatus ? (
+                    <span className={`pill ${STATUS_PILL[v.lastRunStatus]}`}>{v.lastRunStatus}</span>
+                  ) : (
+                    <span className="pill pill-pending">no runs</span>
+                  )}
+                </div>
+                <div className="blurb">{STRATEGY_BLURB[v.strategy]}</div>
+                <div className="cid">{v.collector_id}</div>
+                {v.dissentCount > 0 && (
+                  <div className="sub" style={{ color: "var(--dissent)", marginTop: 10 }}>
+                    outvoted on {v.dissentCount} cell{v.dissentCount === 1 ? "" : "s"}
+                  </div>
+                )}
+                {v.error && (
+                  <div className="sub" style={{ color: "var(--break)", marginTop: 10 }}>{v.error}</div>
                 )}
               </div>
-              <div className="blurb">{STRATEGY_BLURB[v.strategy]}</div>
-              <div className="cid">{v.collector_id}</div>
-              {v.dissentCount > 0 && (
-                <div className="sub" style={{ color: "var(--amber)", marginTop: 8 }}>
-                  outvoted on {v.dissentCount} cell{v.dissentCount === 1 ? "" : "s"}
-                </div>
-              )}
-              {v.error && (
-                <div className="sub" style={{ color: "var(--red-soft)", marginTop: 8 }}>{v.error}</div>
-              )}
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>
@@ -129,8 +156,11 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
       {(activeJob || (lastJob && lastJob.status === "error")) && (
         <div className="section">
           <div className="section-head">
-            <div className="h2">{activeJob ? "Cycle in progress" : "Last cycle failed"}</div>
-            <div className="sub faint">{timeAgo((activeJob ?? lastJob).created_at)}</div>
+            <div>
+              <span className="eyebrow no-rule">{activeJob ? "Live" : "Failure"}</span>
+              <div className="h2" style={{ marginTop: 6 }}>{activeJob ? "Cycle in progress" : "Last cycle failed"}</div>
+            </div>
+            <div className="sub faint mono" style={{ fontSize: 11 }}>{timeAgo((activeJob ?? lastJob).created_at)}</div>
           </div>
           <div className="log">
             {(activeJob ?? lastJob).log.map((line, i) => (
@@ -141,12 +171,12 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         </div>
       )}
 
-      {/* ---- consensus data ---- */}
       <div className="section">
         <div className="section-head">
           <div>
-            <div className="h2">Consensus output</div>
-            <div className="sub faint">
+            <span className="eyebrow no-rule">Output</span>
+            <div className="h2" style={{ marginTop: 6 }}>Consensus table</div>
+            <div className="sub faint" style={{ marginTop: 3 }}>
               What the pipeline emits — every value agreed by at least 2 of {detail.variants.length} scrapers.
             </div>
           </div>
@@ -160,7 +190,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         {detail.consensus.length === 0 ? (
           <div className="panel empty">No data yet — run a cycle to scrape this target.</div>
         ) : (
-          <div className="panel panel-flush tablewrap">
+          <div className="panel panel-flush tablewrap" style={{ borderColor: "var(--line-ink)" }}>
             <table>
               <thead>
                 <tr>
@@ -207,13 +237,13 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         )}
       </div>
 
-      {/* ---- heal timeline ---- */}
       <div className="section">
         <div className="section-head">
           <div>
-            <div className="h2">Healing ledger</div>
-            <div className="sub faint">
-              Every repair Bright Data proposed, and how the Flock&apos;s consensus judged it.
+            <span className="eyebrow no-rule">Repairs</span>
+            <div className="h2" style={{ marginTop: 6 }}>Healing ledger</div>
+            <div className="sub faint" style={{ marginTop: 3 }}>
+              Every repair Bright Data proposed, and how the flock&apos;s consensus judged it.
             </div>
           </div>
         </div>
@@ -230,7 +260,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
                     {h.verdict === "rejected" && "Fix rejected — did not match consensus"}
                     {h.verdict === "pending" && "Repair in progress…"}
                     {h.verdict === "needs_human" && "Escalated to a human"}
-                    <span className="faint" style={{ fontWeight: 400 }}>
+                    <span className="faint mono" style={{ fontWeight: 400, fontSize: 11 }}>
                       {" "}· {STRATEGY_LABEL[h.strategy as keyof typeof STRATEGY_LABEL] ?? h.strategy} · {timeAgo(h.started_at)}
                     </span>
                   </div>
@@ -243,23 +273,17 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         )}
       </div>
 
-      {/* ---- history ---- */}
       {detail.history.length > 0 && (
         <div className="section">
           <div className="section-head">
-            <div className="h2">Run history</div>
+            <div>
+              <span className="eyebrow no-rule">Telemetry</span>
+              <div className="h2" style={{ marginTop: 6 }}>Run history</div>
+            </div>
             <div className="sub faint">Scraper health across the last {detail.history.length} cycles.</div>
           </div>
           <div className="panel">
-            <div className="hist">
-              {detail.history.map((h) => (
-                <div className="hist-col" key={h.runId} title={`run #${h.runId} · ${h.startedAt}`}>
-                  {h.healthy > 0 && <div className="hist-seg hist-healthy" style={{ height: h.healthy * 13 }} />}
-                  {h.dissenting > 0 && <div className="hist-seg hist-dissenting" style={{ height: h.dissenting * 13 }} />}
-                  {h.broken > 0 && <div className="hist-seg hist-broken" style={{ height: h.broken * 13 }} />}
-                </div>
-              ))}
-            </div>
+            <RunHistory history={detail.history} total={detail.variants.length} />
           </div>
         </div>
       )}
