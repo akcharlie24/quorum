@@ -249,3 +249,166 @@ export async function variantWeights(targetId: number, lookback = 10): Promise<M
   }
   return weights;
 }
+
+export interface SummaryFact {
+  label: string;
+  value: string;
+  /** The specific evidence behind the value — a row name, a rejected reading, a count. */
+  detail?: string;
+  tone?: "good" | "warn" | "bad" | "neutral";
+}
+
+export interface FlockSummary {
+  headline: string;
+  facts: SummaryFact[];
+}
+
+function plural(n: number, word: string): string {
+  if (n === 1) return `1 ${word}`;
+  return `${n} ${word.endsWith("y") && !/[aeiou]y$/.test(word) ? word.slice(0, -1) + "ies" : word + "s"}`;
+}
+
+function joinList(xs: string[]): string {
+  if (xs.length <= 1) return xs[0] ?? "";
+  return `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+}
+
+/**
+ * Describes what this particular flock is doing, computed from its own telemetry.
+ *
+ * Deliberately built from per-flock statistics — which field is contested, which scraper
+ * is carrying the run, the single most consequential value the vote rejected — because a
+ * summary assembled from generic sentences reads identically for every target and tells
+ * the reader nothing they could not have guessed.
+ */
+export async function summarizeTarget(name: string): Promise<FlockSummary | undefined> {
+  const d = await getTargetDetail(name);
+  if (!d) return undefined;
+
+  const facts: SummaryFact[] = [];
+  const itemLabel = d.schema.itemLabel ?? "row";
+  const numericFields = Object.entries(d.schema.fields).filter(([, t]) => t !== "string").map(([f]) => f);
+
+  // — what it watches ————————————————————————————————————
+  const pageCount = d.schema.urls?.length;
+  facts.push({
+    label: "Watching",
+    value: pageCount ? `${plural(pageCount, "page")}, named explicitly` : "1 listing page",
+    detail: `Extracting ${joinList(Object.keys(d.schema.fields))}; rows identified by ${d.schema.keyField}.`,
+    tone: "neutral",
+  });
+
+  // — coverage this run ——————————————————————————————————
+  if (d.consensus.length > 0) {
+    const complete = d.consensus.filter((r) =>
+      numericFields.every((f) => r[f] !== null && r[f] !== undefined)
+    ).length;
+    const missing = d.consensus.length - complete;
+    facts.push({
+      label: "Latest run",
+      value: `${plural(d.consensus.length, itemLabel)} shipped`,
+      detail: numericFields.length
+        ? `${complete} complete${missing ? `, ${missing} missing ${joinList(numericFields)} — reported as empty rather than guessed` : ""}.`
+        : undefined,
+      tone: missing === 0 ? "good" : "warn",
+    });
+  }
+
+  // — which field the scrapers actually fight over ————————————————
+  if (d.votes.length > 0) {
+    const byField = new Map<string, number>();
+    for (const v of d.votes) byField.set(v.field, (byField.get(v.field) ?? 0) + 1);
+    const [topField, topCount] = [...byField.entries()].sort((a, b) => b[1] - a[1])[0];
+    facts.push({
+      label: "Contested field",
+      value: `${topField} — ${plural(topCount, "cell")} disputed`,
+      detail:
+        byField.size > 1
+          ? `Other fields disputed: ${joinList([...byField.keys()].filter((f) => f !== topField))}.`
+          : `Every other field was unanimous.`,
+      tone: "warn",
+    });
+
+    // The single clearest save: a peer proposed a different real value and lost.
+    const save = d.votes.find((v) =>
+      v.dissenting.some((x) => x.value !== null && x.value !== undefined && x.value !== "")
+    );
+    if (save) {
+      const loser = save.dissenting.find((x) => x.value !== null && x.value !== undefined && x.value !== "")!;
+      const who = d.variants.find((x) => x.id === loser.variantId)?.strategy ?? "another scraper";
+      facts.push({
+        label: "Bad value blocked",
+        value: `${JSON.stringify(loser.value)} → ${JSON.stringify(save.consensusValue)}`,
+        detail: `On "${save.rowKey}", ${who} read ${JSON.stringify(loser.value)} for ${save.field}. A single-scraper pipeline would have shipped it.`,
+        tone: "bad",
+      });
+    }
+  } else if (d.consensus.length > 0) {
+    facts.push({
+      label: "Agreement",
+      value: "unanimous",
+      detail: "No cell needed arbitration this run.",
+      tone: "good",
+    });
+  }
+
+  // — who is carrying the run, by track record —————————————————
+  const weights = await variantWeights(d.id);
+  if (weights.size > 0) {
+    const ranked = d.variants
+      .map((v) => ({ strategy: v.strategy, w: weights.get(v.id) ?? 1, status: v.lastRunStatus }))
+      .sort((a, b) => b.w - a.w);
+    const best = ranked[0];
+    const worst = ranked[ranked.length - 1];
+    if (best && worst && best.strategy !== worst.strategy) {
+      facts.push({
+        label: "Most trusted scraper",
+        value: `${best.strategy} (${Math.round(best.w * 100)}% agreement)`,
+        detail: `${worst.strategy} sits at ${Math.round(worst.w * 100)}%; its vote is weighted down when the two disagree.`,
+        tone: "neutral",
+      });
+    }
+  }
+
+  // — failures the flock absorbed ——————————————————————————
+  const broken = d.variants.filter((v) => v.lastRunStatus === "broken");
+  if (broken.length > 0) {
+    facts.push({
+      label: "Scraper down",
+      value: `${joinList(broken.map((b) => b.strategy))} returned nothing`,
+      detail: `${d.variants.length - broken.length} of ${d.variants.length} scrapers produced the output. No data was lost.`,
+      tone: "bad",
+    });
+  }
+
+  // — repairs ———————————————————————————————————————
+  if (d.heals.length > 0) {
+    const approved = d.heals.filter((h) => h.verdict === "approved").length;
+    const rejected = d.heals.filter((h) => h.verdict === "rejected").length;
+    const regressed = d.heals.filter((h) => h.verification === "regressed").length;
+    facts.push({
+      label: "Self-healing",
+      value: `${approved} approved · ${rejected} rejected`,
+      detail:
+        (regressed
+          ? `${plural(regressed, "approved fix")} later failed in production and was flagged. `
+          : "") + "Every decision was made by the vote, with no human review.",
+      tone: regressed > 0 ? "warn" : "good",
+    });
+  }
+
+  const headline =
+    d.health === "healthy"
+      ? `All ${d.variants.length} scrapers agreed — nothing needed arbitration.`
+      : d.health === "protected"
+        ? d.votes.length > 0
+          ? `The vote overruled ${plural(d.votes.length, "reading")} before they reached the output.`
+          : "A scraper failed and the others carried the run."
+        : d.health === "unverified"
+          ? "Only one scraper reported — nothing here has been cross-checked."
+          : d.health === "down"
+            ? "No usable output from this flock."
+            : "This flock has not run yet.";
+
+  return { headline, facts };
+}

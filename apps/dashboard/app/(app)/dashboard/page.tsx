@@ -54,6 +54,7 @@ export default function Console() {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [itemLabel, setItemLabel] = useState("product");
+  const [urls, setUrls] = useState("");
   const [description, setDescription] = useState("");
   const [fields, setFields] = useState<FieldDraft[]>(PRESETS.Products.fields);
   const [keyField, setKeyField] = useState("name");
@@ -89,11 +90,12 @@ export default function Console() {
       const res = await fetch("/api/targets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, url, itemLabel, description, keyField, fields }),
+        body: JSON.stringify({ name, url, itemLabel, description, keyField, fields, urls }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "failed to start");
       setUrl("");
+      setUrls("");
       setName("");
       await refresh();
     } catch (err) {
@@ -147,6 +149,20 @@ export default function Console() {
             <label className="label">Each row is a…</label>
             <input value={itemLabel} onChange={(e) => setItemLabel(e.target.value)} placeholder="product" />
           </div>
+          <div className="field">
+            <label className="label">Exact pages (optional, one per line)</label>
+            <textarea
+              value={urls}
+              onChange={(e) => setUrls(e.target.value)}
+              rows={3}
+              placeholder={"https://example.com/item/1\nhttps://example.com/item/2"}
+            />
+            <div className="sub faint" style={{ marginTop: 4 }}>
+              Leave empty to scrape the listing URL above. Naming the pages yourself stops Bright Data
+              inventing a crawl of its own — on one listing it fetched ~150 pages and returned nothing.
+            </div>
+          </div>
+
           <div className="field">
             <label className="label">Extra instruction (optional)</label>
             <input

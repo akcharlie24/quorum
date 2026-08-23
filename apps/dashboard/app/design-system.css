@@ -1586,3 +1586,56 @@ td.num {
 .table-legend .swatch { width: 10px; height: 10px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
 .table-legend .swatch-kept { background: var(--agree-soft); border: 1px solid var(--agree); }
 .table-legend .swatch-disputed { background: var(--dissent-soft); border: 1px solid var(--dissent); }
+
+/* ---- per-flock explainer ------------------------------------------------- */
+/* Sits above the variant cards so the page states what happened before it
+   shows the evidence. Generated from telemetry, so it is never stale. */
+.flock-summary {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--brand);
+  background: var(--paper-2);
+  padding: 16px 18px;
+  margin-bottom: 22px;
+}
+.flock-summary-head {
+  font-family: var(--display);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+.flock-summary ul { margin: 0; padding-left: 18px; }
+.flock-summary li {
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+.flock-summary li:last-child { margin-bottom: 0; }
+
+/* ---- per-flock fact grid -------------------------------------------------- */
+/* Label / value / evidence, so the reader can scan the numbers and only drop
+   into the prose for the one that surprises them. */
+.fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.fact { background: var(--paper); padding: 12px 14px; }
+.fact-label {
+  font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--ink-4); margin-bottom: 5px;
+}
+.fact-value {
+  font-family: var(--mono); font-size: 13.5px; font-weight: 600;
+  color: var(--ink); line-height: 1.35;
+}
+.fact-detail { font-size: 12px; line-height: 1.55; color: var(--ink-3); margin-top: 6px; }
+
+/* A coloured rule carries the tone without shouting it in the background. */
+.fact-good    { box-shadow: inset 3px 0 0 var(--agree); }
+.fact-warn    { box-shadow: inset 3px 0 0 var(--dissent); }
+.fact-bad     { box-shadow: inset 3px 0 0 var(--break); }
+.fact-neutral { box-shadow: inset 3px 0 0 var(--line-2); }

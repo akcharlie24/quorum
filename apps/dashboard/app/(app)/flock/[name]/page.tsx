@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, use } from "react";
-import type { JobRecord, TargetDetail } from "@silk/core";
+import type { FlockSummary, JobRecord, TargetDetail } from "@silk/core";
 import { STRATEGY_BLURB, STRATEGY_LABEL } from "@silk/core/browser";
 
 import { logClass, timeAgo } from "@/lib/format";
@@ -29,6 +29,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
 
   const [detail, setDetail] = useState<TargetDetail | null>(null);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [summary, setSummary] = useState<FlockSummary | null>(null);
   const [missing, setMissing] = useState(false);
   const [starting, setStarting] = useState(false);
 
@@ -37,6 +38,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
     if (res.status === 404) return setMissing(true);
     const data = await res.json();
     setDetail(data.detail);
+    setSummary(data.summary ?? null);
     setJobs(data.jobs);
   }, [target]);
 
@@ -128,6 +130,21 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
         </div>
       </div>
 
+      {summary && (
+        <div className="flock-summary">
+          <div className="flock-summary-head">{summary.headline}</div>
+          <div className="fact-grid">
+            {summary.facts.map((f, i) => (
+              <div className={`fact fact-${f.tone ?? "neutral"}`} key={i}>
+                <div className="fact-label">{f.label}</div>
+                <div className="fact-value">{f.value}</div>
+                {f.detail && <div className="fact-detail">{f.detail}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {detail.variants.length === 0 && (
         <div className="banner banner-info">
           <span className="spinner" />
@@ -209,8 +226,10 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
             <span className="eyebrow no-rule">Output</span>
             <div className="h2" style={{ marginTop: 6 }}>Consensus table</div>
             <div className="sub faint" style={{ marginTop: 3 }}>
-              What the pipeline actually ships. Each value is the one the flock agreed on; where they
-              disagreed, the rejected readings are listed beneath it.
+              Every cell is voted on separately. A value ships when two scrapers independently read
+              the same thing; where they split, the more reliable scraper&apos;s reading wins and the
+              rejected ones are struck through below it. A scraper that finds nothing abstains rather
+              than voting for empty.
             </div>
           </div>
           {detail.votes.length > 0 && (
