@@ -10,6 +10,8 @@ export interface CliResult {
   stderr: string;
   json: unknown | null; // best-effort parse of the last JSON value in stdout
   exitCode: number;
+  /** true when WE killed the process on timeout — the output carries no clue that we did */
+  timedOut: boolean;
 }
 
 export type BdError = "broken" | "empty" | "timeout" | "rate_limited" | "network";
@@ -40,20 +42,17 @@ export function runCli(
       args,
       { timeout: timeoutMs, env: process.env, maxBuffer: 64 * 1024 * 1024 },
       (err, stdout, stderr) => {
-        const exitCode =
-          err &&
-          typeof (err as NodeJS.ErrnoException & { code?: unknown }).code ===
-            "number"
-            ? (err as unknown as { code: number }).code
-            : err
-              ? 1
-              : 0;
+        const e = err as (NodeJS.ErrnoException & { killed?: boolean; signal?: string; code?: unknown }) | null;
+        const exitCode = e && typeof e.code === "number" ? (e.code as number) : err ? 1 : 0;
         resolve({
           ok: !err,
           stdout: stdout ?? "",
           stderr: stderr ?? "",
           json: extractJson(stdout ?? ""),
           exitCode,
+          // execFile reports a timeout kill only here; stdout looks like an ordinary
+          // truncated log, so without this a timeout is misread as a scraper failure.
+          timedOut: !!e?.killed || e?.signal === "SIGTERM",
         });
       },
     );
@@ -61,6 +60,8 @@ export function runCli(
 }
 
 export function classifyError(res: CliResult): BdError {
+  // We killed it: that is our impatience, whatever the log happens to say.
+  if (res.timedOut) return "timeout";
   const text = (res.stdout + res.stderr).toLowerCase();
   if (text.includes("429") || text.includes("rate limit")) return "rate_limited";
   // Our own connectivity failing is not the scraper's fault — healing it would be

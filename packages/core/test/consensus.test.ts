@@ -191,10 +191,20 @@ test("scorePreview handles Bright Data's truncated previews", () => {
 
 test("network failures are never treated as scraper breakage", () => {
   const netFail = {
-    ok: false, exitCode: 1, json: null, stdout: "Triggering scrape...\nWaiting for results...\n",
+    ok: false, exitCode: 1, json: null, timedOut: false,
+    stdout: "Triggering scrape...\nWaiting for results...\n",
     stderr: "fetch failed (response_id d2t178741961)",
   };
   assert.equal(classifyError(netFail), "network");
+
+  // A batch scrape we killed leaves no timeout text in the log at all — only the
+  // kill flag distinguishes it from a genuine scraper failure.
+  const killed = {
+    ok: false, exitCode: 1, json: null, timedOut: true,
+    stdout: "Submitting batch job...\nCollecting (batch)...\n", stderr: "",
+  };
+  assert.equal(classifyError(killed), "timeout");
+  assert.ok(isInfrastructureFailure(`${classifyError(killed)}: Collecting (batch)...`));
   assert.ok(isInfrastructureFailure("network: fetch failed"));
   assert.ok(isInfrastructureFailure("rate_limited: 429"));
   // a genuine extraction fault must still be healable
