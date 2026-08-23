@@ -14,9 +14,9 @@ import {
   startHealEvent,
   startRun,
   upsertTarget,
-} from "./db.js";
-import { consensus, normalizeRows } from "./consensus.js";
-import type { TargetSchema } from "./types.js";
+} from "./db.ts";
+import { consensus, normalizeRows } from "./consensus.ts";
+import type { TargetSchema } from "./types.ts";
 
 const schema: TargetSchema = {
   keyField: "name",

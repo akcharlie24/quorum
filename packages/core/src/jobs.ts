@@ -1,4 +1,4 @@
-import { db } from "./db.js";
+import { db } from "./db.ts";
 
 export type JobKind = "flock" | "run";
 export type JobStatus = "running" | "done" | "error";

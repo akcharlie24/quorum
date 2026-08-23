@@ -2,12 +2,21 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FieldType, JobRecord, TargetSummary } from "@silk/core";
+
 import { logClass, timeAgo } from "@/lib/format";
+import { Reveal } from "@/components/reveal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface FieldDraft {
   name: string;
   type: FieldType;
 }
+
+const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: "string", label: "string" },
+  { value: "number", label: "number" },
+  { value: "integer", label: "integer" },
+];
 
 const PRESETS: Record<string, { itemLabel: string; fields: FieldDraft[] }> = {
   Products: {
@@ -37,7 +46,7 @@ const PRESETS: Record<string, { itemLabel: string; fields: FieldDraft[] }> = {
   },
 };
 
-export default function Home() {
+export default function Console() {
   const [targets, setTargets] = useState<TargetSummary[]>([]);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -98,20 +107,21 @@ export default function Home() {
 
   return (
     <>
-      <div className="hero">
-        <h2>Spin up a Flock</h2>
+      <div className="hero-strip">
+        <span className="eyebrow no-rule">New target</span>
+        <h2 style={{ marginTop: 10 }}>Commission a flock</h2>
         <p>
-          SILK builds <strong>three</strong> scrapers for every URL — each told to extract the same data a different
-          way. They run together and vote on every value, so when a site changes, the survivors outvote the casualty
-          and your data stays clean. Their agreement is also what grades Bright Data&apos;s repair, which is why
-          healing needs no human.
+          Quorum builds <strong>three</strong> scrapers for every URL — each told to extract the same data a different
+          way. They run together and vote on every value, so when a site changes the survivors outvote the casualty and
+          your data stays clean. Their agreement is also what grades Bright Data&apos;s repair, which is why healing
+          needs no human.
         </p>
       </div>
 
-      <form onSubmit={submit} className="panel section" style={{ marginTop: 14 }}>
+      <form onSubmit={submit} className="panel" style={{ marginTop: 20 }}>
         {error && <div className="banner banner-err">{error}</div>}
 
-        <div className="grid grid-2" style={{ marginBottom: 14 }}>
+        <div className="grid grid-2 gap-lg" style={{ marginBottom: 16 }}>
           <div className="field">
             <label className="label">Target URL</label>
             <input
@@ -132,7 +142,7 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="grid grid-2" style={{ marginBottom: 18 }}>
+        <div className="grid grid-2 gap-lg" style={{ marginBottom: 22 }}>
           <div className="field">
             <label className="label">Each row is a…</label>
             <input value={itemLabel} onChange={(e) => setItemLabel(e.target.value)} placeholder="product" />
@@ -147,15 +157,15 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="section-head" style={{ marginBottom: 10 }}>
+        <div className="section-head" style={{ marginBottom: 12, alignItems: "flex-end" }}>
           <div>
-            <div className="label" style={{ marginBottom: 3 }}>Fields to extract</div>
+            <div className="label" style={{ marginBottom: 4 }}>Fields to extract</div>
             <div className="sub faint">The key field identifies a row across all three scrapers.</div>
           </div>
           <div style={{ display: "flex", gap: 7 }}>
             {Object.keys(PRESETS).map((p) => (
               <button type="button" key={p} className="btn btn-ghost btn-sm" onClick={() => applyPreset(p)}>
-                {p}
+                <span>{p}</span>
               </button>
             ))}
           </div>
@@ -172,23 +182,29 @@ export default function Home() {
               }}
               placeholder="field name"
             />
-            <select
+            <Select
               value={f.type}
-              onChange={(e) => {
+              onValueChange={(v) => {
                 const next = [...fields];
-                next[i] = { ...f, type: e.target.value as FieldType };
+                next[i] = { ...f, type: v as FieldType };
                 setFields(next);
               }}
             >
-              <option value="string">string</option>
-              <option value="number">number</option>
-              <option value="integer">integer</option>
-            </select>
+              <SelectTrigger aria-label={`Type for ${f.name || "field"}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FIELD_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <label className="keycell">
               <input
                 type="radio"
                 name="keyField"
-                style={{ width: "auto" }}
                 checked={keyField === f.name}
                 onChange={() => setKeyField(f.name)}
               />
@@ -205,16 +221,23 @@ export default function Home() {
           </div>
         ))}
 
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18, gap: 12, flexWrap: "wrap" }}>
           <button
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => setFields([...fields, { name: "", type: "string" }])}
           >
-            + Add field
+            <span>+ Add field</span>
           </button>
           <button className="btn" disabled={submitting}>
-            {submitting ? <><span className="spinner" />Launching…</> : "🕸 Spin up Flock"}
+            {submitting ? (
+              <span><span className="spinner" />Commissioning…</span>
+            ) : (
+              <>
+                <span>Commission the flock</span>
+                <span className="arrow">→</span>
+              </>
+            )}
           </button>
         </div>
       </form>
@@ -222,14 +245,17 @@ export default function Home() {
       {runningFlocks.length > 0 && (
         <div className="section">
           <div className="section-head">
-            <div className="h2">Building</div>
-            <div className="sub faint">Bright Data writes each scraper with AI — 5 to 25 minutes per variant.</div>
+            <div>
+              <span className="eyebrow no-rule">In construction</span>
+              <div className="h2" style={{ marginTop: 6 }}>Bright Data is writing the scrapers</div>
+            </div>
+            <div className="sub faint">5 to 25 minutes per variant — this page keeps itself current.</div>
           </div>
           {runningFlocks.map((j) => (
             <div className="panel" key={j.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
                 <div className="h2"><span className="spinner" />{j.target_name}</div>
-                <div className="sub faint">started {timeAgo(j.created_at)}</div>
+                <div className="sub faint mono" style={{ fontSize: 11 }}>started {timeAgo(j.created_at)}</div>
               </div>
               <div className="log">
                 {j.log.map((line, i) => (
@@ -243,45 +269,56 @@ export default function Home() {
 
       <div className="section">
         <div className="section-head">
-          <div className="h2">Your Flocks</div>
-          {targets.length > 0 && <div className="sub faint">{targets.length} target{targets.length === 1 ? "" : "s"} under watch</div>}
+          <div>
+            <span className="eyebrow no-rule">Under watch</span>
+            <div className="h2" style={{ marginTop: 6 }}>Your flocks</div>
+          </div>
+          {targets.length > 0 && (
+            <div className="sub faint mono" style={{ fontSize: 11 }}>
+              {targets.length} TARGET{targets.length === 1 ? "" : "S"}
+            </div>
+          )}
         </div>
 
         {!loaded ? (
           <div className="empty"><span className="spinner" />Loading…</div>
         ) : targets.length === 0 ? (
           <div className="panel empty">
-            No Flocks yet. Paste a URL above and SILK will build three scrapers for it.
+            No flocks yet. Paste a URL above and Quorum will commission three scrapers for it.
           </div>
         ) : (
-          <div className="grid grid-3">
-            {targets.map((t) => (
-              <a className="tcard" key={t.id} href={`/flock/${encodeURIComponent(t.name)}`}>
-                <div className="tcard-head">
-                  <h3>{t.name}</h3>
-                  <span className={`pill pill-${t.health}`}>{t.health}</span>
-                </div>
-                <div className="url">{t.url}</div>
-                <div className="tcard-stats">
-                  <div className="stat">
-                    <div className="k">{t.variantCount}</div>
-                    <div className="v">scrapers</div>
+          <div className="grid grid-3 gap-lg">
+            {targets.map((t, i) => (
+              <Reveal key={t.id} delay={i * 50}>
+                <a className="tcard" href={`/flock/${encodeURIComponent(t.name)}`}>
+                  <div className="tcard-head">
+                    <h3>{t.name}</h3>
+                    <span className={`pill pill-${t.health}`}>{t.health}</span>
                   </div>
-                  <div className="stat">
-                    <div className="k">{t.consensusRows}</div>
-                    <div className="v">rows</div>
+                  <div className="url">{t.url}</div>
+                  <div className="tcard-stats">
+                    <div className="stat">
+                      <div className="k">{t.variantCount}</div>
+                      <div className="v">scrapers</div>
+                    </div>
+                    <div className="stat">
+                      <div className="k">{t.consensusRows}</div>
+                      <div className="v">rows</div>
+                    </div>
+                    <div className="stat">
+                      <div className="k">{t.runCount}</div>
+                      <div className="v">runs</div>
+                    </div>
+                    <div className="stat">
+                      <div className="k">{t.healApproved}</div>
+                      <div className="v">healed</div>
+                    </div>
                   </div>
-                  <div className="stat">
-                    <div className="k">{t.runCount}</div>
-                    <div className="v">runs</div>
+                  <div className="sub faint mono" style={{ marginTop: 12, fontSize: 10.5 }}>
+                    LAST RUN {timeAgo(t.lastRunAt).toUpperCase()}
                   </div>
-                  <div className="stat">
-                    <div className="k">{t.healApproved}</div>
-                    <div className="v">healed</div>
-                  </div>
-                </div>
-                <div className="sub faint" style={{ marginTop: 11 }}>last run {timeAgo(t.lastRunAt)}</div>
-              </a>
+                </a>
+              </Reveal>
             ))}
           </div>
         )}

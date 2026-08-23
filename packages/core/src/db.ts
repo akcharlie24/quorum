@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { join } from "node:path";
-import { REPO_ROOT } from "./env.js";
-import type { TargetSchema, VariantStrategy } from "./types.js";
+import { REPO_ROOT } from "./env.ts";
+import type { TargetSchema, VariantStrategy } from "./types.ts";
 
 const db = new Database(join(REPO_ROOT, "silk.db"));
 db.pragma("journal_mode = WAL");

@@ -2,6 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
+    // Core is never compiled — it runs through tsx and is bundled by Next — so its
+    // relative imports name the .ts sources directly. That is what lets Turbopack
+    // resolve them; it has no equivalent of webpack's extensionAlias.
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]

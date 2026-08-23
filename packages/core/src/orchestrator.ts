@@ -1,9 +1,9 @@
-import { createScraperDetached } from "./brightdata.js";
-import { addVariant, getTarget, getVariants, retireVariants, upsertTarget } from "./db.js";
-import { appendJobLog, createJob, finishJob } from "./jobs.js";
-import { runCycle } from "./runner.js";
-import { STRATEGY_LABEL, strategyPrompts } from "./strategies.js";
-import type { TargetSchema, VariantStrategy } from "./types.js";
+import { createScraperDetached } from "./brightdata.ts";
+import { addVariant, getTarget, getVariants, retireVariants, upsertTarget } from "./db.ts";
+import { appendJobLog, createJob, finishJob } from "./jobs.ts";
+import { runCycle } from "./runner.ts";
+import { STRATEGY_LABEL, strategyPrompts } from "./strategies.ts";
+import type { TargetSchema, VariantStrategy } from "./types.ts";
 
 /**
  * Kick off Flock creation as a background job and return its id immediately —

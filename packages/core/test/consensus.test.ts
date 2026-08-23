@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { coerce, consensus, normalizeRows } from "../src/consensus.js";
-import { previewMatchScore } from "../src/healer.js";
-import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.js";
-import { sanitizePrompt } from "../src/brightdata.js";
-import type { TargetSchema } from "../src/types.js";
+import { coerce, consensus, normalizeRows } from "../src/consensus.ts";
+import { previewMatchScore } from "../src/healer.ts";
+import { MAX_DESCRIPTION, strategyPrompts } from "../src/strategies.ts";
+import { sanitizePrompt } from "../src/brightdata.ts";
+import type { TargetSchema } from "../src/types.ts";
 
 const schema: TargetSchema = {
   keyField: "name",
