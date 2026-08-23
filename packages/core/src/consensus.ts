@@ -50,7 +50,11 @@ function lookupField(src: Record<string, unknown>, field: string): unknown {
   const lower = field.toLowerCase();
   for (const k of Object.keys(src)) {
     const kl = k.toLowerCase();
-    if (kl === lower || kl.endsWith(`_${lower}`) || kl === `product_${lower}`) return src[k];
+    // `${field}_text` matches too: we ask scrapers for raw text (price_text) so that
+    // parsing stays in our coercion rather than in a generated parser that throws.
+    if (kl === lower || kl === `${lower}_text` || kl.endsWith(`_${lower}`) || kl === `product_${lower}`) {
+      return src[k];
+    }
   }
   return undefined;
 }

@@ -212,12 +212,31 @@ export async function runScraper(
   // marks a working scraper broken, so we wait far longer than realtime ever needs.
   timeoutMs = 180 * 60_000
 ): Promise<{ rows: unknown[]; raw: CliResult }> {
+  // Not every collector honours --urls: some ignore the batch and return only their
+  // seed page. Fanning out one URL per call costs the same page loads and works either
+  // way, so a URL list is scraped page by page with small concurrency.
+  if (urls && urls.length > 1) {
+    const rows: unknown[] = [];
+    let last: CliResult | undefined;
+    const queue = [...urls];
+    const worker = async () => {
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        const one = await runScraper(collectorId, next, undefined, timeoutMs);
+        rows.push(...one.rows);
+        last = one.raw;
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    return {
+      rows,
+      raw: last ?? { ok: true, stdout: "", stderr: "", json: null, exitCode: 0, timedOut: false },
+    };
+  }
+
   const dir = mkdtempSync(join(tmpdir(), "silk-run-"));
   const outFile = join(dir, "out.json");
   const args = ["scraper", "run", collectorId];
-  // A URL list batches through /dca/trigger and scrapes only the pages named,
-  // rather than letting the collector discover (and bill for) its own.
-  if (urls && urls.length > 0) args.push("--urls", urls.join(","));
+  if (urls && urls.length === 1) args.push(urls[0]);
   else if (url) args.push(url);
   args.push("--json", "-o", outFile);
   const res = await runCli(args, timeoutMs);
