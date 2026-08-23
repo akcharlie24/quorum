@@ -133,11 +133,30 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
       {summary && (
         <div className="flock-summary">
           <div className="flock-summary-head">{summary.headline}</div>
-          <div className="fact-grid">
+          <div className="fact-flow">
             {summary.facts.map((f, i) => (
               <div className={`fact fact-${f.tone ?? "neutral"}`} key={i}>
-                <div className="fact-label">{f.label}</div>
-                <div className="fact-value">{f.value}</div>
+                <div className="fact-head">
+                  <span className="fact-label">{f.label}</span>
+                  <span className="fact-value">
+                    {f.value.includes(" → ") ? (
+                      // A rejected-value fact reads better shown than described: the
+                      // reading that lost, struck out, next to the one that shipped.
+                      (() => {
+                        const [was, now] = f.value.split(" → ");
+                        return (
+                          <>
+                            <span className="fact-was">{was}</span>
+                            <span className="fact-arrow">→</span>
+                            <span className="fact-now">{now}</span>
+                          </>
+                        );
+                      })()
+                    ) : (
+                      f.value
+                    )}
+                  </span>
+                </div>
                 {f.detail && <div className="fact-detail">{f.detail}</div>}
               </div>
             ))}

@@ -1613,29 +1613,86 @@ td.num {
 }
 .flock-summary li:last-child { margin-bottom: 0; }
 
-/* ---- per-flock fact grid -------------------------------------------------- */
-/* Label / value / evidence, so the reader can scan the numbers and only drop
-   into the prose for the one that surprises them. */
-.fact-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1px;
-  background: var(--line);
+/* ---- per-flock readout ---------------------------------------------------
+   Deliberately NOT card-shaped: the variant cards above already own that
+   language, and repeating it made the two blocks read as the same thing. This
+   is a traced argument instead — one rail, one arrow per finding, evidence
+   indented underneath the claim it supports. */
+.flock-summary {
   border: 1px solid var(--line);
+  background: var(--paper-2);
+  padding: 18px 20px 16px;
+  margin-bottom: 22px;
 }
-.fact { background: var(--paper); padding: 12px 14px; }
+.flock-summary-head {
+  font-family: var(--display);
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--ink);
+  padding-bottom: 13px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.fact-flow { padding-left: 2px; }
+
+.fact {
+  position: relative;
+  padding: 11px 0 11px 26px;
+  border-bottom: 1px dashed var(--line);
+}
+.fact:last-child { border-bottom: none; padding-bottom: 2px; }
+
+/* the arrow is the bullet: colour carries the tone, nothing else needs to */
+.fact::before {
+  content: "▸";
+  position: absolute;
+  left: 2px;
+  top: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-4);
+}
+.fact-good::before { color: var(--agree); }
+.fact-warn::before { color: var(--dissent); }
+.fact-bad::before { color: var(--break); }
+
+.fact-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
 .fact-label {
-  font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase;
-  color: var(--ink-4); margin-bottom: 5px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  min-width: 148px;
+  flex-shrink: 0;
 }
 .fact-value {
-  font-family: var(--mono); font-size: 13.5px; font-weight: 600;
-  color: var(--ink); line-height: 1.35;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
 }
-.fact-detail { font-size: 12px; line-height: 1.55; color: var(--ink-3); margin-top: 6px; }
+.fact-detail {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  margin-top: 5px;
+  padding-left: 158px;
+}
+/* the label column collapses before the text does */
+@media (max-width: 720px) {
+  .fact-label { min-width: 0; }
+  .fact-detail { padding-left: 0; }
+}
 
-/* A coloured rule carries the tone without shouting it in the background. */
-.fact-good    { box-shadow: inset 3px 0 0 var(--agree); }
-.fact-warn    { box-shadow: inset 3px 0 0 var(--dissent); }
-.fact-bad     { box-shadow: inset 3px 0 0 var(--break); }
-.fact-neutral { box-shadow: inset 3px 0 0 var(--line-2); }
+/* The one fact worth showing rather than telling: what was rejected, what shipped. */
+.fact-was { text-decoration: line-through; color: var(--break-2); }
+.fact-arrow { margin: 0 8px; color: var(--ink-4); }
+.fact-now { color: var(--agree); }
