@@ -44,25 +44,32 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
   const fields = fieldList(schema);
   const extra = schema.description?.trim();
 
-  const build = (strategy: VariantStrategy, withExtra: boolean): string =>
-    [
-      `Listing page with many ${item}s.`,
-      withExtra && extra ? extra : "",
-      `Read ONLY this page. Do not follow links or open individual ${item} pages.`,
-      `Return a flat array: EVERY ${item} on this page as its own top-level JSON object, not just the first, and not nested inside another field.`,
-      `Fields: ${fields}.`,
-      `Use these exact field names. Each value must be a plain number or string, never a nested object. Use null if missing.`,
-      STRATEGY_CLAUSE[strategy],
-    ]
-      .filter(Boolean)
-      .join(" ");
+  /**
+   * Clauses in reading order, each with a priority. When the prompt exceeds the
+   * description cap we drop whole low-priority clauses rather than slicing the tail —
+   * a blind slice used to cut the strategy clause mid-word, which is the one part that
+   * makes the three variants differ at all.
+   */
+  const clauses = (strategy: VariantStrategy): { text: string; priority: number }[] => [
+    { text: `Listing page with many ${item}s.`, priority: 3 },
+    { text: extra ?? "", priority: 5 },
+    { text: `Read ONLY this page. Do not follow links or open individual ${item} pages.`, priority: 4 },
+    { text: `Return a flat array: EVERY ${item} on this page as its own top-level JSON object.`, priority: 1 },
+    { text: `Fields: ${fields}.`, priority: 0 },
+    { text: `Use these exact field names. Values must be plain numbers or strings, never nested objects. Use null if missing.`, priority: 2 },
+    { text: STRATEGY_CLAUSE[strategy], priority: 1 },
+  ];
 
   const out = {} as Record<VariantStrategy, string>;
   for (const strategy of Object.keys(STRATEGY_CLAUSE) as VariantStrategy[]) {
-    // Drop the user's optional instruction before truncating anything structural.
-    let prompt = build(strategy, true);
-    if (prompt.length > MAX_DESCRIPTION) prompt = build(strategy, false);
-    out[strategy] = prompt.slice(0, MAX_DESCRIPTION).trim();
+    let parts = clauses(strategy).filter((c) => c.text);
+    // Shed the least important clause until it fits; never cut one in half.
+    while (parts.map((c) => c.text).join(" ").length > MAX_DESCRIPTION && parts.some((c) => c.priority > 0)) {
+      const worst = Math.max(...parts.map((c) => c.priority));
+      const i = parts.findIndex((c) => c.priority === worst);
+      parts = parts.filter((_, j) => j !== i);
+    }
+    out[strategy] = parts.map((c) => c.text).join(" ").slice(0, MAX_DESCRIPTION).trim();
   }
   return out;
 }
