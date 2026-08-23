@@ -10,13 +10,13 @@ import { Survival } from "@/components/diagrams/survival";
 import { ConsolePreview } from "@/components/diagrams/console-preview";
 import { StrategyCss, StrategyDom, StrategyText } from "@/components/diagrams/strategies";
 
+// The live flocks, and only the live flocks — this strip is a claim about what is
+// running right now, so it has to match the console.
 const UNDER_QUORUM = [
   "imdb.com/chart/top",
   "store.steampowered.com",
-  "github.com/trending",
   "ikea.com/desks",
-  "books.toscrape.com",
-  "agmarknet.gov.in",
+  "github.com",
 ];
 
 const STEPS = [
@@ -85,16 +85,17 @@ export default function Landing() {
             <div>
               <span className="eyebrow no-rule">
                 <span className="hexpill" style={{ background: "var(--brand-soft)", color: "var(--brand)" }}>
-                  Built on Bright Data Scraper Studio
+                  The reliability layer for Bright Data scrapers
                 </span>
               </span>
               <h1>
                 No single scraper<br />is <span className="mark">trusted</span>.
               </h1>
               <p className="lede">
-                Quorum runs three independently-written scrapers against every URL and ships only what they agree on.
-                When a site changes, the survivors outvote the casualty — so the breakage shows up in your dashboard
-                instead of in your data.
+                Bright Data writes the scrapers, handles the hostile half of the web, and repairs them when they
+                break. Quorum runs three of them against every URL and ships only what they agree on — so when a
+                site changes, the survivors outvote the casualty and the breakage lands in your dashboard instead
+                of in your data.
               </p>
               <div className="hero-cta">
                 <a className="btn btn-lg" href="/dashboard">
@@ -111,6 +112,8 @@ export default function Landing() {
                 <span>Cell-level majority vote</span>
                 <span className="dot" />
                 <span>Zero-human repair approval</span>
+                <span className="dot" />
+                <span>Built on Bright Data Scraper Studio</span>
               </div>
             </div>
 
@@ -354,9 +357,11 @@ export default function Landing() {
             <span className="eyebrow" style={{ color: "rgba(239,239,236,.55)" }}>The layer underneath</span>
             <h2>Quorum doesn’t scrape. It decides what to believe.</h2>
             <p style={{ color: "rgba(239,239,236,.6)" }}>
-              Proxies, rendering, CAPTCHA, retries and the scrapers themselves are Bright Data’s job. Quorum
-              commissions them, runs them together, reconciles the results, and owns the one thing a scraping platform
-              can’t decide for you: whether the answer is right.
+              Describe a page in plain English and Bright Data’s Scraper Studio writes a working collector for it,
+              then keeps it alive through proxies, rendering, CAPTCHA and retries — and rewrites it by itself when
+              the markup moves. That is a genuinely hard problem, solved. Quorum commissions those collectors, runs
+              them together, reconciles what comes back, and owns the one question a scraping platform is not in a
+              position to answer for you: whether the result is right.
             </p>
           </Reveal>
 
@@ -422,7 +427,8 @@ export default function Landing() {
             <div>
               <Logo size={28} href={null} />
               <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 14, maxWidth: "38ch", lineHeight: 1.65 }}>
-                The reliability layer for web scrapers. Redundancy, a vote, and a repair loop that has to earn its merge.
+                The reliability layer for Bright Data scrapers. Redundancy, a vote, and a repair loop that has to
+                earn its merge.
               </p>
             </div>
             <div className="foot-col">
@@ -435,12 +441,13 @@ export default function Landing() {
             <div className="foot-col">
               <h4>Built with</h4>
               <span>Bright Data Scraper Studio</span>
+              <span>Bright Data Collector API</span>
               <span>Next.js · TypeScript</span>
-              <span>SQLite telemetry</span>
+              <span>Postgres telemetry</span>
             </div>
           </div>
           <div className="foot-bottom">
-            <span>QUORUM · CONSENSUS SCRAPING</span>
+            <span>QUORUM · THE RELIABILITY LAYER FOR BRIGHT DATA SCRAPERS</span>
             <span>NO SINGLE SCRAPER IS TRUSTED</span>
           </div>
         </div>
