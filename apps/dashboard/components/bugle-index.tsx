@@ -19,34 +19,43 @@ function duration(ms: number | null): string {
 }
 
 /**
+ * The four weighted contributions, in bar order. Four distinct hues rather than two
+ * ambers side by side — the old drift/dispute pair differed only in lightness, which
+ * is the first thing to go under colour-vision deficiency.
+ */
+const PARTS = [
+  { k: "breakage", label: "Breakage", weight: VOLATILITY_WEIGHTS.breakageRate, of: (t: TargetVolatility) => t.breakageRate },
+  { k: "drift", label: "Drift", weight: VOLATILITY_WEIGHTS.driftPerRun, of: (t: TargetVolatility) => t.driftPerRun },
+  { k: "dispute", label: "Disputes", weight: VOLATILITY_WEIGHTS.disputeRate, of: (t: TargetVolatility) => t.disputeRate },
+  { k: "heals", label: "Repairs", weight: VOLATILITY_WEIGHTS.healsPerRun, of: (t: TargetVolatility) => t.healsPerRun },
+] as const;
+
+/**
  * The score decomposed into the four things that produced it, so a number nobody can
- * audit becomes a bar anyone can. Widths are the weighted contributions, not the raw rates.
+ * audit becomes a bar anyone can. Widths are the weighted contributions, not raw rates.
  */
 function ScoreBar({ t }: { t: TargetVolatility }) {
-  const parts = [
-    { k: "breakage", v: Math.min(1, t.breakageRate) * VOLATILITY_WEIGHTS.breakageRate },
-    { k: "drift", v: Math.min(1, t.driftPerRun) * VOLATILITY_WEIGHTS.driftPerRun },
-    { k: "dispute", v: Math.min(1, t.disputeRate) * VOLATILITY_WEIGHTS.disputeRate },
-    { k: "heals", v: Math.min(1, t.healsPerRun) * VOLATILITY_WEIGHTS.healsPerRun },
-  ].filter((p) => p.v > 0.5);
-
+  const segs = PARTS.map((p) => ({ ...p, v: Math.min(1, p.of(t)) * p.weight })).filter((p) => p.v >= 0.5);
   return (
-    <div className="vbar" title={parts.map((p) => `${p.k} ${p.v.toFixed(0)}`).join(" · ")}>
-      {parts.map((p) => (
-        <span key={p.k} className={`vbar-seg vbar-${p.k}`} style={{ width: `${p.v}%` }} />
+    <div className="vbar" role="img" aria-label={segs.map((p) => `${p.label} ${p.v.toFixed(0)}`).join(", ") || "no contributions"}>
+      {segs.map((p) => (
+        <span key={p.k} className={`vbar-seg vbar-${p.k}`} style={{ width: `${p.v}%` }} title={`${p.label} ${p.v.toFixed(0)}`} />
       ))}
     </div>
   );
 }
 
-export function BugleIndex() {
-  const [data, setData] = useState<{ targets: TargetVolatility[]; totals: BugleTotals } | null>(null);
+type BugleData = { targets: TargetVolatility[]; totals: BugleTotals };
+
+export function BugleIndex({ initial }: { initial?: BugleData }) {
+  const [data, setData] = useState<BugleData | null>(initial ?? null);
 
   useEffect(() => {
+    if (initial) return;
     void fetch("/api/bugle", { cache: "no-store" })
       .then((r) => r.json())
       .then(setData);
-  }, []);
+  }, [initial]);
 
   if (!data) return <div className="panel empty">Reading the telemetry…</div>;
   const { targets, totals } = data;
@@ -57,17 +66,37 @@ export function BugleIndex() {
 
   return (
     <>
-      <div className="section">
-        <span className="eyebrow">Layer 3 · telemetry</span>
-        <h1 className="h1" style={{ marginTop: 10 }}>The web rot index</h1>
-        <p className="lede" style={{ maxWidth: "62ch", marginTop: 12 }}>
-          Every cycle Quorum runs is evidence about how stable a site really is. This page is
-          that evidence, aggregated — which sites break their scrapers, how fast we notice, and
-          how often a repair that reported success actually held.
-        </p>
-      </div>
+      {/* ── masthead: what the page is, and how to read its one invented number ── */}
+      <header className="bugle-head">
+        <div className="bugle-title">
+          <span className="eyebrow no-rule">Layer 3 · telemetry</span>
+          <h1>The web rot index</h1>
+          <p>
+            Every cycle Quorum runs is evidence about how stable a site really is. This page is
+            that evidence, aggregated — which sites break their scrapers, how fast we notice, and
+            how often a repair that reported success actually held.
+          </p>
+        </div>
 
-      <div className="stats" style={{ marginTop: 8 }}>
+        <div className="bugle-key">
+          <div className="bugle-key-top">
+            <span className="bugle-key-label">Volatility is built from</span>
+            <span className="bugle-key-scale">0 — 100</span>
+          </div>
+          <ul className="bugle-key-list">
+            {PARTS.map((p) => (
+              <li key={p.k}>
+                <span className={`vkey-swatch vbar-${p.k}`} aria-hidden />
+                <span className="vkey-label">{p.label}</span>
+                <span className="vkey-weight">{p.weight}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="bugle-key-note">Weights out of 100. Each bar below is these four, to scale.</p>
+        </div>
+      </header>
+
+      <div className="stats">
         <div className="stat-cell">
           <div className="k">{totals.runs}</div>
           <div className="v">cycles run</div>
@@ -85,7 +114,7 @@ export function BugleIndex() {
           <div className="v">readings overruled</div>
           <div className="d">Values a scraper proposed that the vote kept out of the output.</div>
         </div>
-        <div className="stat-cell">
+        <div className="stat-cell is-headline">
           <div className="k">{totals.silentDrift}</div>
           <div className="v">silent drifts caught</div>
           <div className="d">
@@ -106,11 +135,12 @@ export function BugleIndex() {
         </div>
 
         <div className="panel panel-flush tablewrap" style={{ borderColor: "var(--line-ink)" }}>
-          <table>
+          <table className="lboard">
             <thead>
               <tr>
+                <th className="lb-rank">#</th>
                 <th>Site</th>
-                <th style={{ width: "24%" }}>Volatility</th>
+                <th style={{ width: "28%" }}>Volatility</th>
                 <th className="num">Breakage</th>
                 <th className="num">Disputes</th>
                 <th className="num">Drift / run</th>
@@ -120,12 +150,11 @@ export function BugleIndex() {
               </tr>
             </thead>
             <tbody>
-              {targets.map((t) => (
+              {targets.map((t, i) => (
                 <tr key={t.name}>
+                  <td className="lb-rank">{String(i + 1).padStart(2, "0")}</td>
                   <td>
-                    <a href={`/flock/${encodeURIComponent(t.name)}`} style={{ fontWeight: 600 }}>
-                      {t.name}
-                    </a>
+                    <a className="lb-name" href={`/flock/${encodeURIComponent(t.name)}`}>{t.name}</a>
                     {t.silentDrift > 0 && (
                       <span className="drift-mark is-critical" style={{ marginLeft: 10 }}>
                         ◈ {t.silentDrift} silent
@@ -151,13 +180,28 @@ export function BugleIndex() {
         </div>
 
         {/* Small-sample statistics should announce themselves rather than be discovered. */}
-        <div className="sub faint" style={{ marginTop: 12, maxWidth: "70ch" }}>
-          Sample sizes are in the last column. With single-digit run counts these are
-          indicative, not authoritative — the index gets sharper the longer the flocks run.
-          <em> Detect</em> is mean cycle duration: a fault is found within the cycle that
-          produced it, so the cycle time is the detection time. <em>Heal</em> is the time from
-          Bright Data proposing a fix to Quorum accepting or rejecting it.
-        </div>
+        <dl className="methodology">
+          <div>
+            <dt>Sample size</dt>
+            <dd>
+              In the last column. With single-digit run counts these are indicative, not
+              authoritative — the index sharpens the longer the flocks run.
+            </dd>
+          </div>
+          <div>
+            <dt>Detect</dt>
+            <dd>
+              Mean cycle duration. A fault is found within the cycle that produced it, so the
+              cycle time is the detection time.
+            </dd>
+          </div>
+          <div>
+            <dt>Heal</dt>
+            <dd>
+              Time from Bright Data proposing a fix to Quorum accepting or rejecting it.
+            </dd>
+          </div>
+        </dl>
       </div>
 
       <div className="section" style={{ marginTop: 40 }}>
@@ -170,9 +214,9 @@ export function BugleIndex() {
 
         <div className="grid grid-2 gap-lg">
           <Reveal>
-            <div className="panel">
-              <div className="eyebrow no-rule">Self-reported success is not success</div>
-              <p style={{ marginTop: 12 }}>
+            <article className="finding">
+              <h3>Self-reported success is not success</h3>
+              <p>
                 {healDecided === 0 ? (
                   <>No repairs have been proposed yet, so there is nothing to report here.</>
                 ) : (
@@ -194,19 +238,19 @@ export function BugleIndex() {
                 )}
               </p>
               {totals.healRegressed > 0 && (
-                <p style={{ marginTop: 12, color: "var(--break)" }}>
+                <p className="finding-punch">
                   That last number is the reason production verification exists. A preview showed
                   100% correct rows and the deployed scraper still failed — an approval gate that
                   trusts the platform&apos;s own report would have called it a success.
                 </p>
               )}
-            </div>
+            </article>
           </Reveal>
 
           <Reveal delay={80}>
-            <div className="panel">
-              <div className="eyebrow no-rule">The failures voting cannot see</div>
-              <p style={{ marginTop: 12 }}>
+            <article className="finding">
+              <h3>The failures voting cannot see</h3>
+              <p>
                 {totals.driftSignals === 0 ? (
                   <>
                     Spider-Sense has not raised a signal yet. It needs at least three runs of
@@ -223,14 +267,14 @@ export function BugleIndex() {
                 )}
               </p>
               {totals.silentDrift > 0 && (
-                <p style={{ marginTop: 12 }}>
+                <p className="finding-punch">
                   Consensus works by disagreement, so a fault all three scrapers share is
                   invisible to it — they were each reading the page correctly. Those{" "}
-                  {totals.silentDrift} would have shipped clean through any amount of
-                  redundancy, and through a single scraper too.
+                  {totals.silentDrift} would have shipped clean through any amount of redundancy,
+                  and through a single scraper too.
                 </p>
               )}
-            </div>
+            </article>
           </Reveal>
         </div>
       </div>

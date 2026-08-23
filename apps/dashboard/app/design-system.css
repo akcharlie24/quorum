@@ -29,6 +29,9 @@
   --break-2: #ec5c45;
   --break-soft: #fbdcd6;
   --marker: #e9ff6b;
+  /* 4th hue for the volatility bar. Validated for CVD separation against
+     break / dissent-2 / brand; a grey here fell under the chroma floor. */
+  --teal: #0a9ba1;
 
   /* type */
   --sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1697,74 +1700,91 @@ td.num {
 .fact-arrow { margin: 0 8px; color: var(--ink-4); }
 .fact-now { color: var(--agree); }
 
-/* ── Spider-Sense ─────────────────────────────────────────────────────────
-   Drift is a second, independent detector, so it gets its own visual language:
-   a severity rail on the left rather than the health pills the vote uses. The
-   two must never look like the same statement about the same thing. */
+/* ── Spider-Sense ──────────────────────────────────────────────────────
+   Drift is a second, independent detector, so it gets its own visual language: a
+   severity rail rather than the health pills the vote uses. The tint is confined to
+   the header — a full red slab reads as a crashed page, not as a signal that fired
+   correctly, which is the opposite of the point. */
 
-.sentry {
-  border: 1px solid var(--line-ink);
-  background: var(--paper);
+.sentry { display: grid; gap: 12px; }
+
+/* The headline count first, because "every scraper agreed" is the finding. */
+.sentry-banner {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line-ink); background: var(--ink); color: var(--paper);
+  padding: 12px 16px; font-size: 13px; line-height: 1.5;
+}
+.sentry-banner-n {
+  font-family: var(--display); font-size: 20px; font-weight: 600; line-height: 1;
+  color: var(--marker); font-variant-numeric: tabular-nums;
 }
 
-.sentry-row {
-  padding: 14px 16px 14px 18px;
-  border-bottom: 1px dashed var(--paper-3);
-  border-left: 3px solid var(--ink-4);
-}
-.sentry-row:last-child { border-bottom: none; }
-
-.sentry-row.sev-critical { border-left-color: var(--break); background: var(--break-soft); }
-.sentry-row.sev-warn { border-left-color: var(--dissent-2); background: var(--dissent-soft); }
-.sentry-row.sev-info { border-left-color: var(--ink-4); }
+.sentry-row { border: 1px solid var(--line-2); background: var(--card); }
+.sentry-row.sev-critical { border-color: rgba(207,58,37,.42); }
+.sentry-row.sev-warn { border-color: rgba(226,162,48,.5); }
 
 .sentry-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 16px; border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--ink-4);
 }
-
-.sentry-field {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink-1);
-}
-
-.sentry-kind {
-  font-size: 14px;
-  color: var(--ink-2);
-}
+.sev-critical .sentry-head { background: var(--break-soft); border-left-color: var(--break); border-bottom-color: rgba(207,58,37,.22); }
+.sev-warn .sentry-head { background: var(--dissent-soft); border-left-color: var(--dissent-2); border-bottom-color: rgba(226,162,48,.28); }
+.sev-info .sentry-head { background: var(--paper-2); }
 
 .sentry-sev {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-4);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+  padding: 3px 9px; border: 1px solid currentColor; background: var(--card); color: var(--ink-3);
 }
+.sentry-sev-dot { width: 5px; height: 5px; background: currentColor; }
 .sev-critical .sentry-sev { color: var(--break); }
 .sev-warn .sentry-sev { color: var(--dissent); }
 
-.sentry-detail {
-  margin-top: 6px;
-  font-family: var(--mono);
-  font-size: 12.5px;
-  color: var(--ink-2);
+.sentry-kind {
+  font-family: var(--display); font-size: 14.5px; font-weight: 600;
+  color: var(--ink); letter-spacing: -0.01em;
+}
+.sentry-field {
+  margin-left: auto; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-3); background: var(--card);
+  border: 1px solid var(--line-2); padding: 2px 8px;
 }
 
-/* The whole reason Layer 1 exists — say it loudest. */
-.sentry-fleet {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed rgba(32, 30, 42, 0.28);
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--break);
-  max-width: 68ch;
+.sentry-body { padding: 14px 16px 15px 19px; }
+.sentry-detail { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: var(--ink-2); }
+
+/* was → now, so the reader gets the shape of the change without parsing prose. */
+.sentry-figures { display: flex; align-items: flex-end; gap: 14px; margin-top: 12px; }
+.sentry-figures dt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-4);
 }
+.sentry-figures dd {
+  font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--ink-3);
+  line-height: 1.2; margin-top: 2px; font-variant-numeric: tabular-nums;
+}
+.sentry-figures dd.is-now { color: var(--break); }
+.sentry-figures-arrow { color: var(--ink-4); font-size: 13px; padding-bottom: 3px; }
+
+.sentry-note { margin-top: 12px; font-size: 12.5px; color: var(--ink-4); }
+
+/* The whole reason Layer 1 exists — give it a frame, not just a colour. */
+.sentry-fleet {
+  margin-top: 13px; padding: 11px 13px;
+  border: 1px dashed rgba(207,58,37,.4); background: var(--break-soft);
+  font-size: 13px; line-height: 1.55; color: var(--break); max-width: 74ch;
+}
+.sentry-fleet strong { color: var(--break); font-weight: 600; }
+
+/* Nothing firing is also a result, and should look like one rather than an empty box. */
+.sentry-clear {
+  display: flex; gap: 14px; align-items: flex-start;
+  border: 1px solid var(--line); background: var(--card); padding: 18px 20px;
+}
+.sentry-clear-mark { color: var(--agree); font-size: 15px; line-height: 1.3; }
+.sentry-clear-title { font-family: var(--display); font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.sentry-clear p { font-size: 13px; line-height: 1.6; color: var(--ink-3); max-width: 70ch; }
 
 /* Drift marker on a flock card: adjacent to the health pill, never replacing it. */
 .drift-mark {
@@ -1789,23 +1809,231 @@ td.num {
   gap: 10px;
 }
 .vscore-n {
-  font-family: var(--mono);
-  font-size: 13px;
+  font-family: var(--display);
+  font-size: 17px;
   font-weight: 600;
-  color: var(--ink-1);
-  min-width: 2.2ch;
+  color: var(--ink);
+  min-width: 2.4ch;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .vbar {
   flex: 1;
   display: flex;
-  height: 8px;
+  height: 10px;
   min-width: 60px;
   background: var(--paper-3);
-  gap: 1px;
+  /* 2px of surface between touching segments — the gap separates them, not a stroke. */
+  gap: 2px;
 }
 .vbar-seg { display: block; height: 100%; }
 .vbar-breakage { background: var(--break); }
 .vbar-drift { background: var(--dissent-2); }
-.vbar-dispute { background: var(--dissent); }
-.vbar-heals { background: var(--ink-4); }
+.vbar-dispute { background: var(--brand); }
+.vbar-heals { background: var(--teal); }
+
+/* ── Console header ───────────────────────────────────────────────────────
+   The page leads with what is already running, so it gets a real page title
+   and a tally rather than a small section label. */
+.console-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 24px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.console-head h1 {
+  font-family: var(--display); font-size: 30px; font-weight: 600;
+  letter-spacing: -0.028em; color: var(--ink); margin-top: 8px;
+}
+.console-tally { display: flex; gap: 1px; background: var(--line-2); border: 1px solid var(--line-2); }
+.console-tally > div { background: var(--card); padding: 9px 16px; text-align: right; min-width: 78px; }
+.console-tally dt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.console-tally dd {
+  font-family: var(--mono); font-size: 19px; font-weight: 600; color: var(--ink);
+  line-height: 1.15; margin-top: 2px; font-variant-numeric: tabular-nums;
+}
+.console-tally .is-signal dd { color: var(--dissent); }
+
+/* ── Flock card ───────────────────────────────────────────────────────── */
+.tcard { display: flex; flex-direction: column; }
+.tcard-drift { margin-bottom: 12px; }
+.tcard-stats { margin-top: auto; }
+.tcard-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 12px; font-size: 10.5px; color: var(--ink-4);
+}
+.tcard-go { color: var(--ink-4); transition: transform .2s var(--ease), color .2s var(--ease); }
+.tcard:hover .tcard-go { transform: translateX(3px); color: var(--brand); }
+
+/* ── Commission header ────────────────────────────────────────────────────
+   Two columns so the explanation stops being a paragraph the eye slides off,
+   and the empty half of the strip carries the mechanic instead of texture. */
+.commission-head {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 1px; background: var(--line-2);
+  border: 1px solid var(--line-ink); margin-bottom: 20px;
+}
+.commission-intro { background: var(--card); padding: 26px 28px; }
+.commission-intro h2 {
+  font-family: var(--display); font-size: 26px; font-weight: 600;
+  letter-spacing: -0.028em; color: var(--ink); margin: 10px 0 10px;
+}
+.commission-intro p { color: var(--ink-3); font-size: 14px; line-height: 1.6; max-width: 42ch; }
+
+.beats { list-style: none; display: grid; gap: 1px; background: var(--line-2); }
+.beats li {
+  background: var(--card); padding: 14px 24px;
+  display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: baseline;
+  column-gap: 4px; row-gap: 3px;
+}
+.beats-n { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--ink-4); grid-row: span 2; }
+.beats-t { font-family: var(--display); font-size: 14px; font-weight: 600; color: var(--ink); }
+.beats-d { font-size: 12.5px; color: var(--ink-3); line-height: 1.5; }
+
+/* ── Form ─────────────────────────────────────────────────────────────────
+   Grouped into the three questions it actually asks. The old single grid put
+   three fields in a two-column track, so the third wrapped and left a hole. */
+.form { padding: 0; }
+.fgroup { border-bottom: 1px solid var(--line); padding: 22px 24px 24px; min-inline-size: 0; }
+.fgroup-last { border-bottom: none; }
+.fgroup-legend {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 16px;
+}
+.fgroup-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.fgroup-bar .fgroup-legend { margin-bottom: 0; }
+
+.fgrid { display: grid; gap: 16px 20px; }
+.fgrid-url { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.fgrid-pages { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); margin-top: 16px; align-items: start; }
+
+.label-opt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  color: var(--ink-4); text-transform: uppercase; margin-left: 6px;
+}
+
+.fnote { font-size: 12.5px; line-height: 1.6; color: var(--ink-3); padding-top: 22px; }
+.fnote-evidence { display: block; margin-top: 6px; color: var(--ink-4); font-family: var(--mono); font-size: 11px; }
+.fnote-inline { padding-top: 12px; }
+
+.presets { display: flex; align-items: center; gap: 7px; }
+.presets-label {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-4); margin-right: 2px;
+}
+
+/* Column headings so the bare radio in each row has something to belong to. */
+.schema { border: 1px solid var(--line); }
+.schema-head, .schema-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 132px 68px 38px;
+  gap: 10px; align-items: center;
+}
+.schema-head {
+  padding: 8px 12px; background: var(--paper-2); border-bottom: 1px solid var(--line);
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-4);
+}
+.schema-head span:nth-child(3) { text-align: center; }
+.schema-row { padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.schema-row:last-child { border-bottom: none; }
+.schema-row:hover { background: var(--paper); }
+.schema .keycell { justify-content: center; cursor: pointer; }
+
+.form-actions {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; padding: 18px 24px; border-top: 1px solid var(--line-ink);
+  background: var(--paper-2);
+}
+
+@media (max-width: 860px) {
+  .commission-head, .fgrid-url, .fgrid-pages { grid-template-columns: minmax(0, 1fr); }
+  .fnote { padding-top: 0; }
+  .schema-head, .schema-row { grid-template-columns: minmax(0, 1fr) 110px 56px 38px; }
+}
+
+/* ── Daily Bugle ──────────────────────────────────────────────────────────
+   The page invents one number, so the masthead carries the key to reading it
+   rather than leaving four unexplained colours in every row. */
+.bugle-head {
+  display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 1px; background: var(--line-2);
+  border: 1px solid var(--line-ink); margin-bottom: 20px;
+}
+.bugle-title { background: var(--card); padding: 28px 30px; }
+.bugle-title h1 {
+  font-family: var(--display); font-size: 32px; font-weight: 600;
+  letter-spacing: -0.03em; color: var(--ink); margin: 10px 0 12px;
+}
+.bugle-title p { color: var(--ink-3); font-size: 14px; line-height: 1.65; max-width: 52ch; }
+
+.bugle-key { background: var(--card); padding: 22px 26px; display: flex; flex-direction: column; }
+.bugle-key-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.bugle-key-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.bugle-key-scale { font-family: var(--mono); font-size: 10px; color: var(--ink-4); }
+
+.bugle-key-list { list-style: none; margin-top: 14px; display: grid; gap: 1px; background: var(--line); }
+.bugle-key-list li {
+  background: var(--card); display: grid; grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center; gap: 10px; padding: 7px 2px;
+}
+.vkey-swatch { width: 12px; height: 12px; display: block; }
+.vkey-label { font-size: 13px; color: var(--ink-2); }
+.vkey-weight {
+  font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.bugle-key-note { margin-top: auto; padding-top: 14px; font-size: 11.5px; color: var(--ink-4); line-height: 1.5; }
+
+/* The one number the page exists to report. */
+.stat-cell.is-headline { box-shadow: inset 3px 0 0 var(--break); }
+.stat-cell.is-headline .k { color: var(--break); }
+
+/* ── Leaderboard ──────────────────────────────────────────────────────── */
+.lboard .lb-rank {
+  width: 42px; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-4); font-variant-numeric: tabular-nums;
+}
+.lb-name { font-family: var(--display); font-weight: 600; font-size: 14px; color: var(--ink); }
+.lb-name:hover { color: var(--brand); }
+.lboard tbody tr:hover .vbar { background: var(--line-2); }
+
+/* Methodology as a definition list — the same words, but scannable. */
+.methodology {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1px; background: var(--line); border: 1px solid var(--line);
+  border-top: none; margin-top: -1px;
+}
+.methodology > div { background: var(--paper-2); padding: 14px 16px; }
+.methodology dt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 6px;
+}
+.methodology dd { font-size: 12.5px; line-height: 1.6; color: var(--ink-3); }
+
+/* ── Findings ─────────────────────────────────────────────────────────── */
+.finding {
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 3px solid var(--ink); padding: 20px 22px; height: 100%;
+}
+.finding h3 {
+  font-family: var(--display); font-size: 16px; font-weight: 600;
+  color: var(--ink); letter-spacing: -0.015em; margin-bottom: 10px;
+}
+.finding p { font-size: 13.5px; line-height: 1.7; color: var(--ink-3); }
+.finding strong { color: var(--ink); font-weight: 600; }
+.finding-punch {
+  margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line-2);
+  color: var(--break) !important;
+}
+.finding-punch strong { color: var(--break); }
+
+@media (max-width: 900px) {
+  .bugle-head { grid-template-columns: minmax(0, 1fr); }
+}
