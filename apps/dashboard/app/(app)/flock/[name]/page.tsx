@@ -43,11 +43,19 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
     setJobs(data.jobs);
   }, [target]);
 
+  /**
+   * Poll fast only while something is actually happening.
+   *
+   * A flock build takes 5-25 minutes and a run cycle up to 11, so a fixed 3s poll spends
+   * almost all of its requests re-reading a database that has not changed — thousands of
+   * queries per idle page. Live cadence while a job runs, a slow heartbeat otherwise.
+   */
+  const busy = jobs.some((j) => j.status === "running");
   useEffect(() => {
     void refresh();
-    const t = setInterval(refresh, 3000);
+    const t = setInterval(refresh, busy ? 3000 : 20000);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [refresh, busy]);
 
   async function runCycle(heal: boolean) {
     setStarting(true);

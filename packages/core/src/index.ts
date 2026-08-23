@@ -10,4 +10,5 @@ export { runCycle } from "./runner.ts";
 export * from "./drift.ts";
 export { runSentry, backfillTarget } from "./sentry.ts";
 export * from "./bugle.ts";
+export { cached, invalidate } from "./cache.ts";
 export { composeHealPrompt, scorePreview } from "./healer.ts";

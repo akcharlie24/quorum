@@ -1,3 +1,4 @@
+import { cached } from "./cache.ts";
 import { prisma } from "./prisma.ts";
 import type { Row, TargetSchema, VariantStrategy } from "./types.ts";
 
@@ -129,7 +130,15 @@ export async function openDriftAlerts(targetId: number): Promise<DriftAlertView[
     .sort((x, y) => SEVERITY_RANK[y.severity] - SEVERITY_RANK[x.severity]);
 }
 
-export async function listTargets(): Promise<TargetSummary[]> {
+/**
+ * TTL is deliberately just under the dashboard's 4s poll, so a steady poller gets fresh
+ * data every cycle while a burst of concurrent viewers collapses onto one query.
+ */
+export function listTargets(): Promise<TargetSummary[]> {
+  return cached("targets", 3_500, computeListTargets);
+}
+
+async function computeListTargets(): Promise<TargetSummary[]> {
   const targets = await prisma.target.findMany({ orderBy: { id: "desc" } });
 
   return Promise.all(
@@ -185,8 +194,12 @@ export async function listTargets(): Promise<TargetSummary[]> {
   );
 }
 
-export async function getTargetDetail(name: string): Promise<TargetDetail | undefined> {
-  const summary = (await listTargets()).find((t) => t.name === name);
+export function getTargetDetail(name: string): Promise<TargetDetail | undefined> {
+  return cached(`detail:${name}`, 2_500, () => computeTargetDetail(name));
+}
+
+async function computeTargetDetail(name: string): Promise<TargetDetail | undefined> {
+  const summary = (await computeListTargets()).find((t) => t.name === name);
   if (!summary) return undefined;
 
   const runId = await latestRunId(summary.id);
@@ -341,7 +354,11 @@ function joinList(xs: string[]): string {
  * summary assembled from generic sentences reads identically for every target and tells
  * the reader nothing they could not have guessed.
  */
-export async function summarizeTarget(name: string): Promise<FlockSummary | undefined> {
+export function summarizeTarget(name: string): Promise<FlockSummary | undefined> {
+  return cached(`summary:${name}`, 2_500, () => computeSummary(name));
+}
+
+async function computeSummary(name: string): Promise<FlockSummary | undefined> {
   const d = await getTargetDetail(name);
   if (!d) return undefined;
 

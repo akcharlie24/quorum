@@ -13,6 +13,8 @@ export default function Console() {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
 
+  const busy = jobs.some((j) => j.status === "running");
+
   const refresh = useCallback(async () => {
     const res = await fetch("/api/targets", { cache: "no-store" });
     const data = await res.json();
@@ -23,9 +25,11 @@ export default function Console() {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(refresh, 4000);
+    // Live cadence only while a flock is building or a cycle is running; otherwise a
+    // slow heartbeat, so an idle dashboard left open does not hammer the database.
+    const t = setInterval(refresh, busy ? 4000 : 20000);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [refresh, busy]);
 
   const runningFlocks = jobs.filter((j) => j.kind === "flock" && j.status === "running");
 

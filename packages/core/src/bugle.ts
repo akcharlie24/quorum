@@ -1,3 +1,4 @@
+import { cached } from "./cache.ts";
 import { prisma } from "./prisma.ts";
 import type { Row, TargetSchema } from "./types.ts";
 import { volatilityScore, type BugleTotals, type TargetVolatility, type VolatilityParts } from "./volatility.ts";
@@ -15,7 +16,12 @@ export * from "./volatility.ts";
 const mean = (xs: number[]): number | null =>
   xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 
-export async function volatilityIndex(): Promise<{ targets: TargetVolatility[]; totals: BugleTotals }> {
+/** Recomputed at most twice a minute; a volatility index does not move faster than that. */
+export function volatilityIndex(): Promise<{ targets: TargetVolatility[]; totals: BugleTotals }> {
+  return cached("bugle", 30_000, computeVolatilityIndex);
+}
+
+async function computeVolatilityIndex(): Promise<{ targets: TargetVolatility[]; totals: BugleTotals }> {
   const targets = await prisma.target.findMany({ orderBy: { id: "asc" } });
 
   const rows: TargetVolatility[] = [];

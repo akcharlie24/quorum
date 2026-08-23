@@ -1,3 +1,4 @@
+import { invalidate } from "./cache.ts";
 import { prisma } from "./prisma.ts";
 import type { TargetSchema, VariantStrategy } from "./types.ts";
 
@@ -82,6 +83,9 @@ export async function finishRun(runId: number, consensusRows: unknown[]): Promis
     where: { id: runId },
     data: { finished_at: new Date(), consensus_json: JSON.stringify(consensusRows) },
   });
+  // A finished run changes every cached read there is; drop them rather than make the
+  // operator wait out a TTL to see the cycle they just triggered.
+  invalidate();
 }
 
 export async function recordVariantResult(

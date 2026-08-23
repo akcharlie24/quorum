@@ -1,3 +1,4 @@
+import { invalidate } from "./cache.ts";
 import { prisma } from "./prisma.ts";
 
 export type JobKind = "flock" | "run";
@@ -69,6 +70,8 @@ export async function finishJob(jobId: number, status: JobStatus, error?: string
     where: { id: jobId },
     data: { status, error: error ?? null, finished_at: new Date() },
   });
+  // A flock build adds variants, which every cached target read reflects.
+  invalidate();
 }
 
 export async function getJob(jobId: number): Promise<JobRecord | undefined> {
@@ -90,8 +93,17 @@ export async function recentJobs(targetName?: string, limit = 20): Promise<JobRe
   return rows.map(toRecord);
 }
 
-/** Marks jobs left "running" by a server restart as failed, so the UI never hangs on a ghost. */
+/**
+ * Marks jobs left "running" by a server restart as failed, so the UI never hangs on a ghost.
+ *
+ * Throttled: this is a WRITE, it was firing on every dashboard poll, and it only ever finds
+ * anything after a restart — it looks for jobs stranded for 45 minutes. Running it once a
+ * minute is as timely as running it every four seconds, at a sixtieth of the cost.
+ */
+let lastReap = 0;
 export async function reapStaleJobs(): Promise<void> {
+  if (Date.now() - lastReap < 60_000) return;
+  lastReap = Date.now();
   await prisma.job.updateMany({
     where: { status: "running", created_at: { lt: new Date(Date.now() - 45 * 60_000) } },
     data: { status: "error", error: "interrupted (server restarted)", finished_at: new Date() },
