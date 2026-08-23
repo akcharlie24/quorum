@@ -9,10 +9,12 @@
 import { loadEnv } from "../src/env.ts";
 import { createScraperAwaited, sanitizePrompt } from "../src/brightdata.ts";
 import { addVariant, getTarget, getVariants, retireVariant } from "../src/db.ts";
-import { MAX_DESCRIPTION } from "../src/strategies.ts";
+import { MAX_DESCRIPTION, STRATEGY_CLAUSE_PUBLIC } from "../src/strategies.ts";
 import { prisma } from "../src/prisma.ts";
 
 loadEnv();
+
+const STRATEGY = (process.argv[2] ?? "text-anchor") as "css" | "text-anchor" | "structural";
 
 /**
  * price is requested as a STRING, deliberately.
@@ -26,25 +28,27 @@ loadEnv();
 const PROMPT = sanitizePrompt(
   "Extract two fields from this Steam game page. price_text: the price exactly as " +
     "displayed, as a string, for example \"$59.99\" or \"Free To Play\"; never omit it. " +
-    "title: the game name as a string. Always return both fields as plain strings."
+    "title: the game name as a string. Always return both fields as plain strings. " +
+    STRATEGY_CLAUSE_PUBLIC[STRATEGY]
 ).slice(0, MAX_DESCRIPTION);
 
 async function main() {
   const target = await getTarget("steam-prices");
   if (!target) throw new Error("run steam-setup.ts first");
 
-  for (const v of await getVariants(target.id)) {
-    await retireVariant(v.id);
-    console.log(`retired #${v.id} ${v.strategy} (title-only schema)`);
+  const existing = await getVariants(target.id);
+  if (existing.some((v) => v.strategy === STRATEGY)) {
+    console.log(`${STRATEGY} already present — nothing to build`);
+    return prisma.$disconnect();
   }
 
   const seed = target.schema.urls![0];
-  console.log(`\nbuilding against ${seed}\n  ${PROMPT}\n`);
+  console.log(`\nbuilding ${STRATEGY} against ${seed}\n  ${PROMPT}\n`);
   const t0 = Date.now();
   const { collectorId } = await createScraperAwaited(seed, PROMPT, (id) =>
     console.log(`  accepted ${id}, generating…`)
   );
-  await addVariant(target.id, collectorId, "text-anchor");
+  await addVariant(target.id, collectorId, STRATEGY);
   console.log(`✔ READY ${collectorId} (${((Date.now() - t0) / 60000).toFixed(1)} min)`);
   await prisma.$disconnect();
 }

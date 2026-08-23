@@ -19,7 +19,7 @@ export const STRATEGY_BLURB: Record<VariantStrategy, string> = {
   structural: "Navigates by DOM shape and position — survives renames, breaks on reordering.",
 };
 
-const STRATEGY_CLAUSE: Record<VariantStrategy, string> = {
+export const STRATEGY_CLAUSE_PUBLIC: Record<VariantStrategy, string> = {
   css: "Locate values using CSS class names and element IDs.",
   // An outright ban on class selectors made Bright Data's generator fail outright
   // ("AI generation finished with status error"), so this steers rather than forbids.
@@ -60,7 +60,7 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
     { text: `Return a single JSON object for the ${item} on the page, not an array and not nested.`, priority: 1 },
     { text: `Fields: ${fields}.`, priority: 0 },
     { text: `Use these exact field names. Values must be plain numbers or strings, never nested objects. Use null if missing.`, priority: 2 },
-    { text: STRATEGY_CLAUSE[strategy], priority: 1 },
+    { text: STRATEGY_CLAUSE_PUBLIC[strategy], priority: 1 },
   ] : [
     { text: `Listing page with many ${item}s.`, priority: 3 },
     { text: extra ?? "", priority: 5 },
@@ -68,11 +68,11 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
     { text: `Return a flat array: EVERY ${item} on this page as its own top-level JSON object.`, priority: 1 },
     { text: `Fields: ${fields}.`, priority: 0 },
     { text: `Use these exact field names. Values must be plain numbers or strings, never nested objects. Use null if missing.`, priority: 2 },
-    { text: STRATEGY_CLAUSE[strategy], priority: 1 },
+    { text: STRATEGY_CLAUSE_PUBLIC[strategy], priority: 1 },
   ];
 
   const out = {} as Record<VariantStrategy, string>;
-  for (const strategy of Object.keys(STRATEGY_CLAUSE) as VariantStrategy[]) {
+  for (const strategy of Object.keys(STRATEGY_CLAUSE_PUBLIC) as VariantStrategy[]) {
     let parts = clauses(strategy).filter((c) => c.text);
     // Shed the least important clause until it fits; never cut one in half.
     while (parts.map((c) => c.text).join(" ").length > MAX_DESCRIPTION && parts.some((c) => c.priority > 0)) {

@@ -164,17 +164,34 @@ export function consensus(inputs: VariantInput[], schema: TargetSchema): Consens
           return { variantId: i.variantId, present: !!row, value: row ? row[field] : undefined };
         });
 
-      // cluster equal values, pick the largest cluster with >= 2 members
+      /**
+       * Null abstains rather than votes.
+       *
+       * A null is a failure to extract, not a claim that the value is absent — so
+       * counting it as a vote lets two scrapers that found nothing outvote one that
+       * found the truth. Observed live: css read Stardew Valley at 14.99 while the
+       * other two returned null, and the majority shipped null. Absence of evidence
+       * is not evidence of absence, so only real values compete; null wins only when
+       * nothing else was found.
+       */
+      const isBlank = (v: unknown) => v === null || v === undefined || v === "";
       const clusters: { value: unknown; members: number[] }[] = [];
+      let abstained = 0;
       for (const e of entries) {
         if (!e.present) continue;
+        if (isBlank(e.value)) {
+          abstained++;
+          continue;
+        }
         const cluster = clusters.find((c) => valuesEqual(c.value, e.value, type));
         if (cluster) cluster.members.push(e.variantId);
         else clusters.push({ value: e.value, members: [e.variantId] });
       }
       clusters.sort((a, b) => b.members.length - a.members.length);
       const winner = clusters[0];
-      const hasMajority = winner && winner.members.length >= 2;
+      // Two agreeing values is still the strong case; a lone value beats pure absence,
+      // but the abstainers are recorded as dissent so the cell shows as disputed.
+      const hasMajority = !!winner && (winner.members.length >= 2 || abstained > 0);
 
       out[field] = hasMajority ? winner.value : (winner?.value ?? null);
 
@@ -182,6 +199,12 @@ export function consensus(inputs: VariantInput[], schema: TargetSchema): Consens
       for (const e of entries) {
         if (!e.present) {
           missingByVariant.set(e.variantId, (missingByVariant.get(e.variantId) ?? 0) + 1);
+          continue;
+        }
+        if (winner && isBlank(e.value)) {
+          // Found nothing where a peer found a value: dissent, so the gap stays visible.
+          dissenting.push({ variantId: e.variantId, value: e.value });
+          dissentsByVariant.get(e.variantId)!.push(`${key}.${field}`);
           continue;
         }
         if (hasMajority && !winner.members.includes(e.variantId)) {

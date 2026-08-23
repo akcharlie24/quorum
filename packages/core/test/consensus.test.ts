@@ -128,6 +128,36 @@ test("one variant with wrong prices -> dissenting, consensus keeps truth", () =>
   assert.equal(res.votes.length, 2); // price disputed on both rows
 });
 
+test("a value beats two nulls — absence is not evidence", () => {
+  // Observed live on Steam: css read Stardew Valley at 14.99 while the other two
+  // returned null, and majority rule shipped null. A null is a failed extraction,
+  // not a claim, so it abstains.
+  const found = [{ name: "Stardew Valley", price: 14.99, rating: 4.8, stock: 1 }];
+  const blank = [{ name: "Stardew Valley", price: null, rating: 4.8, stock: 1 }];
+  const res = consensus(
+    [
+      { variantId: 1, rows: normalizeRows(found, schema) },
+      { variantId: 2, rows: normalizeRows(blank, schema) },
+      { variantId: 3, rows: normalizeRows(blank, schema) },
+    ],
+    schema
+  );
+  assert.equal(res.rows[0].price, 14.99, "the found value must win over two nulls");
+  // the scrapers that found nothing are still recorded as dissenting, so it shows up
+  assert.equal(res.verdicts.find((v) => v.variantId === 1)!.status, "healthy");
+  assert.ok(res.verdicts.filter((v) => v.status === "dissenting").length === 2);
+});
+
+test("when nobody finds a value it stays null", () => {
+  const blank = [{ name: "Dota 2", price: null, rating: 4.5, stock: 1 }];
+  const res = consensus(
+    [1, 2, 3].map((variantId) => ({ variantId, rows: normalizeRows(blank, schema) })),
+    schema
+  );
+  assert.equal(res.rows[0].price, null);
+  assert.ok(res.verdicts.every((v) => v.status === "healthy"), "unanimous absence is not dissent");
+});
+
 test("one variant errors -> broken, consensus intact from survivors", () => {
   const res = consensus(
     [
