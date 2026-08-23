@@ -8,6 +8,15 @@ import { logClass, timeAgo } from "@/lib/format";
 import { Reveal } from "@/components/reveal";
 import { RunHistory } from "@/components/run-history";
 
+/** Said in the header so a status never has to be guessed at. */
+const HEALTH_MEANING: Record<string, string> = {
+  healthy: "every scraper agreed",
+  protected: "scrapers disagreed — the vote resolved it and kept the bad reading out",
+  unverified: "too few scrapers reported to cross-check this output",
+  down: "no usable output from this flock",
+  pending: "no runs yet",
+};
+
 const STATUS_PILL: Record<string, string> = {
   healthy: "pill-healthy",
   dissenting: "pill-degraded",
@@ -88,6 +97,7 @@ export default function FlockPage({ params }: { params: Promise<{ name: string }
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <h2 style={{ fontSize: 26 }}>{detail.name}</h2>
             <span className={`pill pill-${detail.health}`}>{detail.health}</span>
+            <span className="sub faint">{HEALTH_MEANING[detail.health] ?? ""}</span>
             {activeJob && (
               <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
                 <span className="live-dot" />

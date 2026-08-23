@@ -37,7 +37,19 @@ export interface TargetSummary {
   url: string;
   schema: TargetSchema;
   variantCount: number;
-  health: "healthy" | "degraded" | "down" | "pending";
+  /**
+   * Describes the DATA, not the fleet.
+   *  healthy    — every scraper agreed
+   *  protected  — scrapers disagreed and the quorum resolved it; output is trustworthy
+   *  unverified — output exists but too few scrapers reported to cross-check it
+   *  down       — no usable output
+   *  pending    — never run
+   *
+   * "protected" deliberately replaces "degraded": a run where the vote overruled a bad
+   * reading has *proven* its output, and labelling that as degradation describes the
+   * scrapers while implying the data is suspect — the opposite of what happened.
+   */
+  health: "healthy" | "protected" | "unverified" | "down" | "pending";
   lastRunAt: string | null;
   consensusRows: number;
   runCount: number;
@@ -93,7 +105,15 @@ export async function listTargets(): Promise<TargetSummary[]> {
         const statuses = await runStatuses(runId);
         const broken = statuses.filter((s) => s === "broken").length;
         const dissenting = statuses.filter((s) => s === "dissenting").length;
-        health = consensusRows === 0 || broken >= 2 ? "down" : broken + dissenting > 0 ? "degraded" : "healthy";
+        const contributing = statuses.length - broken;
+        health =
+          consensusRows === 0 || broken >= 2
+            ? "down"
+            : contributing < 2
+              ? "unverified" // a lone scraper has nothing to be checked against
+              : broken + dissenting > 0
+                ? "protected" // the vote caught a bad reading and kept it out
+                : "healthy";
       }
 
       return {
@@ -194,4 +214,38 @@ export async function getTargetDetail(name: string): Promise<TargetDetail | unde
   );
 
   return { ...summary, variants, consensus, votes, heals, runId, history };
+}
+
+/**
+ * A variant's vote weight, from how often it has agreed with consensus.
+ *
+ * Laplace-smoothed so a new scraper starts neutral rather than untrusted, and floored
+ * so a bad run never silences a variant entirely — reputation should tilt a close call,
+ * not hand one scraper a veto.
+ */
+export async function variantWeights(targetId: number, lookback = 10): Promise<Map<number, number>> {
+  const runs = await prisma.run.findMany({
+    where: { target_id: targetId, finished_at: { not: null } },
+    orderBy: { id: "desc" },
+    take: lookback,
+    select: { id: true },
+  });
+  const weights = new Map<number, number>();
+  if (runs.length === 0) return weights;
+
+  const results = await prisma.variantResult.findMany({
+    where: { run_id: { in: runs.map((r) => r.id) } },
+    select: { variant_id: true, status: true },
+  });
+  const tally = new Map<number, { agreed: number; total: number }>();
+  for (const r of results) {
+    const t = tally.get(r.variant_id) ?? { agreed: 0, total: 0 };
+    t.total += 1;
+    if (r.status === "healthy") t.agreed += 1;
+    tally.set(r.variant_id, t);
+  }
+  for (const [id, t] of tally) {
+    weights.set(id, Math.max(0.25, (t.agreed + 1) / (t.total + 2)));
+  }
+  return weights;
 }

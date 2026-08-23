@@ -58,6 +58,10 @@ export function strategyPrompts(schema: TargetSchema): Record<VariantStrategy, s
     { text: `Each page describes ONE ${item}.`, priority: 0 },
     { text: extra ?? "", priority: 5 },
     { text: `Return a single JSON object for the ${item} on the page, not an array and not nested.`, priority: 1 },
+    // Retail sites routinely split a price into separate dollar and cent elements.
+    // Two DOM-oriented scrapers both read only IKEA's dollars span and outvoted the one
+    // that read the visible text, shipping 144 for a 144.98 desk.
+    { text: `If a value is split across elements (such as dollars and cents), join them into the complete value.`, priority: 2 },
     { text: `Fields: ${fields}.`, priority: 0 },
     { text: `Use these exact field names. Values must be plain numbers or strings, never nested objects. Use null if missing.`, priority: 2 },
     { text: STRATEGY_CLAUSE_PUBLIC[strategy], priority: 1 },

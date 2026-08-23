@@ -11,6 +11,7 @@ import {
   type TargetRecord,
 } from "./db.ts";
 import { consensus, normalizeRows } from "./consensus.ts";
+import { variantWeights } from "./queries.ts";
 import { healAndDecide } from "./healer.ts";
 import type { ConsensusResult } from "./types.ts";
 
@@ -71,8 +72,15 @@ export async function runCycle(
     })
   );
 
+  // Past agreement decides close calls; a first run has no history and weights are 1.
+  const weights = await variantWeights(target.id);
   const res = consensus(
-    results.map((r) => ({ variantId: r.variant.id, rows: r.rows, error: r.error })),
+    results.map((r) => ({
+      variantId: r.variant.id,
+      rows: r.rows,
+      error: r.error,
+      weight: weights.get(r.variant.id) ?? 1,
+    })),
     target.schema
   );
 

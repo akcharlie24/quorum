@@ -120,6 +120,12 @@ interface VariantInput {
   variantId: number;
   rows: Row[]; // already normalized
   error?: string;
+  /**
+   * How much this variant's vote counts, from its track record (see variantWeights).
+   * Defaults to 1. Without it a two-way split is decided by insertion order: on IKEA
+   * one scraper read 99.99 and another 99, and the correct value won by luck.
+   */
+  weight?: number;
 }
 
 /**
@@ -129,6 +135,7 @@ interface VariantInput {
  */
 export function consensus(inputs: VariantInput[], schema: TargetSchema): ConsensusResult {
   const fields = Object.entries(schema.fields);
+  const weightOf = (id: number) => inputs.find((i) => i.variantId === id)?.weight ?? 1;
   const byVariant = new Map<number, Map<string, Row>>();
   const allKeys = new Set<string>();
 
@@ -187,7 +194,12 @@ export function consensus(inputs: VariantInput[], schema: TargetSchema): Consens
         if (cluster) cluster.members.push(e.variantId);
         else clusters.push({ value: e.value, members: [e.variantId] });
       }
-      clusters.sort((a, b) => b.members.length - a.members.length);
+      // Rank by summed reputation first, headcount second: a scraper with a history of
+      // agreeing with consensus outranks one that keeps being outvoted, which is what
+      // decides an otherwise arbitrary 1-1 split.
+      const clusterWeight = (c: { members: number[] }) =>
+        c.members.reduce((sum, id) => sum + weightOf(id), 0);
+      clusters.sort((a, b) => clusterWeight(b) - clusterWeight(a) || b.members.length - a.members.length);
       const winner = clusters[0];
       // Two agreeing values is still the strong case; a lone value beats pure absence,
       // but the abstainers are recorded as dissent so the cell shows as disputed.

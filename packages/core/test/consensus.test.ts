@@ -148,6 +148,30 @@ test("a value beats two nulls — absence is not evidence", () => {
   assert.ok(res.verdicts.filter((v) => v.status === "dissenting").length === 2);
 });
 
+test("reputation decides a 1-1 split instead of insertion order", () => {
+  // Live on IKEA: one scraper read 99.99, another read 99 (it took only the dollars
+  // element), and a third abstained. With equal weights the winner was whichever was
+  // listed first — the right answer by luck. Track record must decide it.
+  const right = [{ name: "MICKE Desk", price: 99.99, rating: 4, stock: 1 }];
+  const truncated = [{ name: "MICKE Desk", price: 99, rating: 4, stock: 1 }];
+  const blank = [{ name: "MICKE Desk", price: null, rating: 4, stock: 1 }];
+
+  const vote = (weightRight: number, weightTruncated: number) =>
+    consensus(
+      [
+        { variantId: 1, rows: normalizeRows(right, schema), weight: weightRight },
+        { variantId: 2, rows: normalizeRows(truncated, schema), weight: weightTruncated },
+        { variantId: 3, rows: normalizeRows(blank, schema), weight: 1 },
+      ],
+      schema
+    ).rows[0].price;
+
+  // the historically reliable scraper wins regardless of ordering
+  assert.equal(vote(0.9, 0.3), 99.99);
+  // and reputation genuinely drives it: flip the weights and the other value wins
+  assert.equal(vote(0.3, 0.9), 99);
+});
+
 test("when nobody finds a value it stays null", () => {
   const blank = [{ name: "Dota 2", price: null, rating: 4.5, stock: 1 }];
   const res = consensus(

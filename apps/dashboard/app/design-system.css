@@ -464,6 +464,14 @@ input::placeholder {
   border-color: rgba(13, 146, 104, 0.4);
   background: var(--agree-soft);
 }
+/* A vote that overruled a bad reading is a success, so it is coloured as one.
+   Amber stays for genuine uncertainty (a dissenting scraper, an unverified run). */
+.pill-protected {
+  color: var(--brand);
+  border-color: rgba(75, 69, 224, 0.35);
+  background: var(--brand-soft);
+}
+.pill-unverified,
 .pill-degraded,
 .pill-dissenting {
   color: var(--dissent);
