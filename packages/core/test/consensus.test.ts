@@ -198,6 +198,8 @@ test("network failures are never treated as scraper breakage", () => {
   assert.ok(isInfrastructureFailure("network: fetch failed"));
   assert.ok(isInfrastructureFailure("rate_limited: 429"));
   // a genuine extraction fault must still be healable
+  // a batch job we stopped waiting for is our impatience, not a scraper defect
+  assert.ok(isInfrastructureFailure("timeout: Collecting (batch)..."));
   assert.ok(!isInfrastructureFailure("schema-mismatch: 250 raw row(s)"));
   assert.ok(!isInfrastructureFailure("empty: scraper returned no rows"));
 });

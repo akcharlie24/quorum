@@ -80,9 +80,16 @@ export function classifyError(res: CliResult): BdError {
   return "broken";
 }
 
-/** Failures caused by our side of the wire, which must never trigger a heal. */
+/**
+ * Failures caused by our side of the wire, which must never trigger a heal.
+ * Timeouts count: a batch job we stopped waiting for is our impatience, not a defect
+ * in the scraper, and healing it would rewrite working code.
+ */
 export function isInfrastructureFailure(error: string | undefined): boolean {
-  return !!error && (error.startsWith("network") || error.startsWith("rate_limited"));
+  return (
+    !!error &&
+    (error.startsWith("network") || error.startsWith("rate_limited") || error.startsWith("timeout"))
+  );
 }
 
 const COLLECTOR_RE = /c_[a-z0-9]{6,}/i;
@@ -184,9 +191,10 @@ export function createScraperAwaited(
 export async function runScraper(
   collectorId: string,
   url?: string,
-  // Real listing scrapes have taken well past 10 minutes (IMDb Top 250 among them);
-  // a short timeout kills a working scrape and records it as a breakage.
-  timeoutMs = 30 * 60_000
+  // Heavy pages (Steam) exceed Bright Data's realtime limit and fall back to batch
+  // mode, where a single collection can run an hour. Cutting a batch job short marks
+  // a working scraper broken, so this waits far longer than a realtime scrape needs.
+  timeoutMs = 75 * 60_000
 ): Promise<{ rows: unknown[]; raw: CliResult }> {
   const dir = mkdtempSync(join(tmpdir(), "silk-run-"));
   const outFile = join(dir, "out.json");
