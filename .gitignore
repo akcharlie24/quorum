@@ -4,6 +4,8 @@ node_modules/
 !.env.example
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 .next/
 .vercel/
 dist/
