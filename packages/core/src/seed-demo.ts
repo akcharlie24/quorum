@@ -16,6 +16,7 @@ import {
   upsertTarget,
 } from "./db.ts";
 import { consensus, normalizeRows } from "./consensus.ts";
+import { runSentry } from "./sentry.ts";
 import type { TargetSchema } from "./types.ts";
 
 const schema: TargetSchema = {
@@ -65,6 +66,9 @@ async function main() {
     for (const v of res.verdicts) await recordVariantResult(runId, v.variantId, v.status, v.rows, v.error, v.dissents);
     for (const vote of res.votes) await recordVote(runId, vote.rowKey, vote.field, vote.consensusValue, vote.dissenting);
     await finishRun(runId, res.rows);
+    // Seeded runs go through the sentry exactly as real ones do, so the demo store
+    // exercises the same code path rather than a hand-written alert.
+    await runSentry(target, runId, res.rows, res.verdicts.map((v) => v.status), () => {});
     return { runId, res };
   }
 
@@ -97,7 +101,24 @@ async function main() {
   // post-heal: everyone healthy again
   await cycle({ [css.id]: PRODUCTS, [text.id]: PRODUCTS, [struct.id]: PRODUCTS });
 
-  console.log(`Seeded "${NAME}" — 5 runs, 1 silent breakage, 1 rejected fix, 1 approved fix.`);
+  /**
+   * The failure the vote cannot see.
+   *
+   * Above, ONE scraper read 0 and the other two outvoted it — that is Layer 2 working.
+   * Here the SITE serves 0 (the Breakage Lab's v3 layout), so all three scrapers agree
+   * and every one of them is right about what the page says and wrong about the world.
+   * Consensus is unanimous, every card is green, and the pipeline ships zeroes.
+   *
+   * Only Spider-Sense sees it, because it is the only check that compares this run
+   * against the target's own history instead of against its peers.
+   */
+  const siteServesZero = PRODUCTS.map((p) => ({ ...p, price: 0 }));
+  await cycle({ [css.id]: siteServesZero, [text.id]: siteServesZero, [struct.id]: siteServesZero });
+
+  console.log(
+    `Seeded "${NAME}" — 6 runs, 1 silent breakage caught by the vote, 1 rejected fix, ` +
+      `1 approved fix, 1 fleet-wide price collapse only Spider-Sense can see.`
+  );
 }
 
 main().then(() => process.exit(0), (e) => { console.error(e); process.exit(1); });

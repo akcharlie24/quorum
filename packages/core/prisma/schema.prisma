@@ -15,6 +15,7 @@ model Target {
   created_at  DateTime  @default(now())
   variants    Variant[]
   runs        Run[]
+  driftAlerts DriftAlert[]
 
   @@map("targets")
 }
@@ -43,6 +44,7 @@ model Run {
   results        VariantResult[]
   votes          Vote[]
   triggeredHeals HealEvent[]
+  driftAlerts    DriftAlert[]
 
   @@map("runs")
 }
@@ -90,6 +92,34 @@ model HealEvent {
   trigger_run    Run?      @relation(fields: [trigger_run_id], references: [id])
 
   @@map("heal_events")
+}
+
+/// Spider-Sense. Consensus compares scrapers against each other and is blind to a
+/// failure they all share; these alerts compare a run against the target's own history,
+/// which is the only way to see one.
+model DriftAlert {
+  id          Int       @id @default(autoincrement())
+  target_id   Int
+  run_id      Int
+  /// null = a whole-dataset signal (row_count_drop) rather than a per-field one
+  field       String?
+  /// row_count_drop | null_spike | value_collapse | distribution_shift | field_vanished
+  kind        String
+  /// info | warn | critical
+  severity    String
+  detail      String
+  baseline    Float?
+  current     Float?
+  /// true = every variant was healthy, so the vote could not possibly have caught this
+  fleet_wide  Boolean   @default(false)
+  /// set on the first later run where the signal stops firing
+  resolved_at DateTime?
+  created_at  DateTime  @default(now())
+  target      Target    @relation(fields: [target_id], references: [id])
+  run         Run       @relation(fields: [run_id], references: [id])
+
+  @@index([target_id, id])
+  @@map("drift_alerts")
 }
 
 model Job {

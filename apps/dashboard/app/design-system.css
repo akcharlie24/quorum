@@ -1696,3 +1696,116 @@ td.num {
 .fact-was { text-decoration: line-through; color: var(--break-2); }
 .fact-arrow { margin: 0 8px; color: var(--ink-4); }
 .fact-now { color: var(--agree); }
+
+/* ── Spider-Sense ─────────────────────────────────────────────────────────
+   Drift is a second, independent detector, so it gets its own visual language:
+   a severity rail on the left rather than the health pills the vote uses. The
+   two must never look like the same statement about the same thing. */
+
+.sentry {
+  border: 1px solid var(--line-ink);
+  background: var(--paper);
+}
+
+.sentry-row {
+  padding: 14px 16px 14px 18px;
+  border-bottom: 1px dashed var(--paper-3);
+  border-left: 3px solid var(--ink-4);
+}
+.sentry-row:last-child { border-bottom: none; }
+
+.sentry-row.sev-critical { border-left-color: var(--break); background: var(--break-soft); }
+.sentry-row.sev-warn { border-left-color: var(--dissent-2); background: var(--dissent-soft); }
+.sentry-row.sev-info { border-left-color: var(--ink-4); }
+
+.sentry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sentry-field {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.sentry-kind {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.sentry-sev {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.sev-critical .sentry-sev { color: var(--break); }
+.sev-warn .sentry-sev { color: var(--dissent); }
+
+.sentry-detail {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* The whole reason Layer 1 exists — say it loudest. */
+.sentry-fleet {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(32, 30, 42, 0.28);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--break);
+  max-width: 68ch;
+}
+
+/* Drift marker on a flock card: adjacent to the health pill, never replacing it. */
+.drift-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  color: var(--dissent);
+}
+.drift-mark.is-critical { color: var(--break); }
+
+/* Volatility score + its decomposition. The bar exists so the composite is auditable
+   rather than asserted: each segment is one weighted contribution to the number. */
+.vscore {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vscore-n {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-1);
+  min-width: 2.2ch;
+  text-align: right;
+}
+.vbar {
+  flex: 1;
+  display: flex;
+  height: 8px;
+  min-width: 60px;
+  background: var(--paper-3);
+  gap: 1px;
+}
+.vbar-seg { display: block; height: 100%; }
+.vbar-breakage { background: var(--break); }
+.vbar-drift { background: var(--dissent-2); }
+.vbar-dispute { background: var(--dissent); }
+.vbar-heals { background: var(--ink-4); }

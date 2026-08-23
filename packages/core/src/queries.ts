@@ -31,6 +31,23 @@ export interface HealView {
   decided_at: string | null;
 }
 
+export interface DriftAlertView {
+  id: number;
+  runId: number;
+  /** null = a whole-dataset signal rather than a per-field one. */
+  field: string | null;
+  kind: string;
+  severity: "info" | "warn" | "critical";
+  detail: string;
+  baseline: number | null;
+  current: number | null;
+  /** Every scraper was healthy, so the vote had nothing to compare and saw nothing. */
+  fleetWide: boolean;
+  createdAt: string;
+}
+
+const SEVERITY_RANK = { critical: 3, warn: 2, info: 1 } as const;
+
 export interface TargetSummary {
   id: number;
   name: string;
@@ -54,6 +71,16 @@ export interface TargetSummary {
   consensusRows: number;
   runCount: number;
   healApproved: number;
+  /**
+   * Spider-Sense, kept deliberately separate from `health`.
+   *
+   * Health describes what the VOTE concluded; drift describes what the vote is
+   * structurally unable to conclude. A flock can be perfectly healthy and drifting at
+   * the same time — that combination is the whole point of Layer 1 — so collapsing the
+   * two into one badge would hide exactly the case worth showing.
+   */
+  openAlerts: number;
+  worstAlert: "info" | "warn" | "critical" | null;
 }
 
 export interface TargetDetail extends TargetSummary {
@@ -61,6 +88,7 @@ export interface TargetDetail extends TargetSummary {
   consensus: Row[];
   votes: VoteView[];
   heals: HealView[];
+  driftAlerts: DriftAlertView[];
   runId: number | null;
   history: { runId: number; startedAt: string; healthy: number; dissenting: number; broken: number }[];
 }
@@ -79,6 +107,28 @@ async function runStatuses(runId: number): Promise<string[]> {
   return rows.map((r) => r.status);
 }
 
+/** Signals that are still firing. Resolved ones stay in the table as history for the Bugle. */
+export async function openDriftAlerts(targetId: number): Promise<DriftAlertView[]> {
+  const rows = await prisma.driftAlert.findMany({
+    where: { target_id: targetId, resolved_at: null },
+    orderBy: { id: "desc" },
+  });
+  return rows
+    .map((a) => ({
+      id: a.id,
+      runId: a.run_id,
+      field: a.field,
+      kind: a.kind,
+      severity: a.severity as DriftAlertView["severity"],
+      detail: a.detail,
+      baseline: a.baseline,
+      current: a.current,
+      fleetWide: a.fleet_wide,
+      createdAt: a.created_at.toISOString(),
+    }))
+    .sort((x, y) => SEVERITY_RANK[y.severity] - SEVERITY_RANK[x.severity]);
+}
+
 export async function listTargets(): Promise<TargetSummary[]> {
   const targets = await prisma.target.findMany({ orderBy: { id: "desc" } });
 
@@ -90,6 +140,7 @@ export async function listTargets(): Promise<TargetSummary[]> {
       const healApproved = await prisma.healEvent.count({
         where: { verdict: "approved", variant: { target_id: t.id } },
       });
+      const alerts = await openDriftAlerts(t.id);
 
       let health: TargetSummary["health"] = "pending";
       let consensusRows = 0;
@@ -127,6 +178,8 @@ export async function listTargets(): Promise<TargetSummary[]> {
         consensusRows,
         runCount,
         healApproved,
+        openAlerts: alerts.length,
+        worstAlert: alerts[0]?.severity ?? null,
       };
     })
   );
@@ -213,7 +266,7 @@ export async function getTargetDetail(name: string): Promise<TargetDetail | unde
     })
   );
 
-  return { ...summary, variants, consensus, votes, heals, runId, history };
+  return { ...summary, variants, consensus, votes, heals, driftAlerts: await openDriftAlerts(summary.id), runId, history };
 }
 
 /**
@@ -266,6 +319,13 @@ export interface FlockSummary {
 function plural(n: number, word: string): string {
   if (n === 1) return `1 ${word}`;
   return `${n} ${word.endsWith("y") && !/[aeiou]y$/.test(word) ? word.slice(0, -1) + "ies" : word + "s"}`;
+}
+
+/** Null rates come back as fractions; row counts as counts. Render each as what it is. */
+function fmtStat(n: number, kind: string): string {
+  if (kind === "null_spike" || kind === "field_vanished") return `${Math.round(n * 100)}% empty`;
+  if (kind === "row_count_drop") return `${Math.round(n)} rows`;
+  return n.toFixed(2);
 }
 
 function joinList(xs: string[]): string {
@@ -381,6 +441,23 @@ export async function summarizeTarget(name: string): Promise<FlockSummary | unde
     });
   }
 
+  // — what the vote could not have seen ——————————————————————
+  if (d.driftAlerts.length > 0) {
+    const worst = d.driftAlerts[0];
+    const fleet = d.driftAlerts.filter((a) => a.fleetWide).length;
+    facts.push({
+      label: "Spider-Sense",
+      value:
+        worst.baseline !== null && worst.current !== null && worst.kind !== "value_collapse"
+          ? `${worst.field ?? "row count"}: ${fmtStat(worst.baseline, worst.kind)} → ${fmtStat(worst.current, worst.kind)}`
+          : worst.detail,
+      detail: fleet
+        ? `Every scraper agreed on this, so the vote could not have caught it — only comparing against this flock's own history did.`
+        : `Flagged by comparing this run against the flock's recent history, not against its peers.`,
+      tone: worst.severity === "critical" ? "bad" : "warn",
+    });
+  }
+
   // — repairs ———————————————————————————————————————
   if (d.heals.length > 0) {
     const approved = d.heals.filter((h) => h.verdict === "approved").length;
@@ -397,8 +474,13 @@ export async function summarizeTarget(name: string): Promise<FlockSummary | unde
     });
   }
 
-  const headline =
-    d.health === "healthy"
+  // A fleet-wide critical must own the headline. "All 3 scrapers agreed" is technically
+  // true and actively misleading here: the agreement IS the finding, and leading with it
+  // as reassurance is precisely the failure mode Layer 1 exists to prevent.
+  const silent = d.driftAlerts.find((a) => a.fleetWide && a.severity === "critical");
+  const headline = silent
+    ? `All ${d.variants.length} scrapers agree — and the data still moved: ${silent.detail}.`
+    : d.health === "healthy"
       ? `All ${d.variants.length} scrapers agreed — nothing needed arbitration.`
       : d.health === "protected"
         ? d.votes.length > 0

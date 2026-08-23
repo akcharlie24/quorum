@@ -154,3 +154,33 @@ export function detectDrift(
 export function isFleetWide(variantStatuses: string[]): boolean {
   return variantStatuses.length > 0 && variantStatuses.every((s) => s === "healthy");
 }
+
+/**
+ * Stable identity for an alert: one signal of one kind on one field.
+ * Used to tell a signal that is still firing from a genuinely new one.
+ */
+export function alertKey(a: { field: string | null; kind: DriftKind }): string {
+  return `${a.field ?? "*"}:${a.kind}`;
+}
+
+/**
+ * Decides which alerts are new and which have cleared.
+ *
+ * An alert fires ONCE, on the transition into alarm — not every cycle it stays broken.
+ * A field that vanished three runs ago is not three pieces of news, and a console that
+ * reprints it every run trains you to stop reading it. When the signal stops firing the
+ * alert resolves, which is what makes "currently open" a meaningful number.
+ *
+ * Kept free of database access so the dedupe rule itself is unit-testable.
+ */
+export function diffAlerts(
+  openKeys: string[],
+  fired: DriftAlert[]
+): { opened: DriftAlert[]; resolvedKeys: string[] } {
+  const open = new Set(openKeys);
+  const firing = new Set(fired.map(alertKey));
+  return {
+    opened: fired.filter((a) => !open.has(alertKey(a))),
+    resolvedKeys: openKeys.filter((k) => !firing.has(k)),
+  };
+}

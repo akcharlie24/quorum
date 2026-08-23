@@ -11,6 +11,8 @@ import {
   type TargetRecord,
 } from "./db.ts";
 import { consensus, normalizeRows } from "./consensus.ts";
+import { runSentry } from "./sentry.ts";
+import type { DriftAlert } from "./drift.ts";
 import { variantWeights } from "./queries.ts";
 import { healAndDecide } from "./healer.ts";
 import type { ConsensusResult } from "./types.ts";
@@ -21,6 +23,8 @@ export interface CycleResult {
   runId: number;
   consensus: ConsensusResult;
   healed: number;
+  /** Signals the vote is structurally incapable of raising — see runSentry. */
+  drift: DriftAlert[];
 }
 
 /** One SILK cycle: run all variants -> vote -> record -> heal losers. */
@@ -99,6 +103,14 @@ export async function runCycle(
   await finishRun(runId, res.rows);
   log(pc.dim(`  consensus dataset: ${res.rows.length} rows — pipeline output is clean`));
 
+  // The vote compares scrapers against each other, so it cannot see a fault they share.
+  // Spider-Sense compares this run against the target's own past, which can.
+  //
+  // Note there is deliberately no heal here: a fleet-wide drift has no dissenting variant,
+  // so the loop below skips it by design. Nothing disagreed, so there is nothing to repair
+  // and no consensus to repair it against — the honest response is an alarm, not a patch.
+  const drift = await runSentry(target, runId, res.rows, res.verdicts.map((v) => v.status), log);
+
   // An approved fix is only provisional. Bright Data's preview can look perfect while
   // the deployed scraper still fails, so every approval must survive a real run.
   for (const heal of await unverifiedHeals(target.id)) {
@@ -133,5 +145,5 @@ export async function runCycle(
     }
   }
 
-  return { runId, consensus: res, healed };
+  return { runId, consensus: res, healed, drift };
 }

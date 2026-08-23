@@ -7,4 +7,7 @@ export * from "./orchestrator.ts";
 export * from "./strategies.ts";
 export { consensus, normalizeRows, coerce, rowKeyOf } from "./consensus.ts";
 export { runCycle } from "./runner.ts";
+export * from "./drift.ts";
+export { runSentry, backfillTarget } from "./sentry.ts";
+export * from "./bugle.ts";
 export { composeHealPrompt, scorePreview } from "./healer.ts";

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectDrift, fingerprint, isFleetWide } from "../src/drift.ts";
+import { alertKey, detectDrift, diffAlerts, fingerprint, isFleetWide } from "../src/drift.ts";
+import type { DriftAlert, DriftKind } from "../src/drift.ts";
 import type { Row, TargetSchema } from "../src/types.ts";
 
 const schema: TargetSchema = {
@@ -62,4 +63,42 @@ test("a genuine price rise is a shift, not a collapse", () => {
 test("unanimous variants mean the site moved, not the scrapers", () => {
   assert.equal(isFleetWide(["healthy", "healthy", "healthy"]), true);
   assert.equal(isFleetWide(["healthy", "healthy", "broken"]), false);
+});
+
+// — dedupe: an alert is news once, not every cycle ————————————————————
+
+const alert = (field: string | null, kind: DriftKind): DriftAlert => ({
+  field,
+  kind,
+  severity: "warn",
+  detail: "x",
+  baseline: 1,
+  current: 0,
+});
+
+test("a signal that is still firing does not re-open", () => {
+  const fired = [alert("price", "null_spike")];
+  const { opened, resolvedKeys } = diffAlerts(["price:null_spike"], fired);
+  assert.equal(opened.length, 0);
+  assert.deepEqual(resolvedKeys, []);
+});
+
+test("a signal that stops firing resolves", () => {
+  const { opened, resolvedKeys } = diffAlerts(["price:null_spike"], []);
+  assert.equal(opened.length, 0);
+  assert.deepEqual(resolvedKeys, ["price:null_spike"]);
+});
+
+test("a different kind on the same field is a separate alert", () => {
+  const { opened, resolvedKeys } = diffAlerts(["price:null_spike"], [
+    alert("price", "null_spike"),
+    alert("price", "value_collapse"),
+  ]);
+  assert.deepEqual(opened.map(alertKey), ["price:value_collapse"]);
+  assert.deepEqual(resolvedKeys, []);
+});
+
+test("whole-dataset signals get their own key", () => {
+  assert.equal(alertKey(alert(null, "row_count_drop")), "*:row_count_drop");
+  assert.notEqual(alertKey(alert(null, "row_count_drop")), alertKey(alert("price", "row_count_drop")));
 });

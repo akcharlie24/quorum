@@ -311,6 +311,15 @@ export default function Console() {
                     <h3>{t.name}</h3>
                     <span className={`pill pill-${t.health}`}>{t.health}</span>
                   </div>
+                  {/* Health is the vote's verdict; drift is a separate detector that can
+                      fire while every scraper is green. Shown beside the pill, not inside it. */}
+                  {t.openAlerts > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <span className={`drift-mark${t.worstAlert === "critical" ? " is-critical" : ""}`}>
+                        ◈ Spider-Sense: {t.openAlerts} {t.openAlerts === 1 ? "signal" : "signals"}
+                      </span>
+                    </div>
+                  )}
                   <div className="url">{t.url}</div>
                   <div className="tcard-stats">
                     <div className="stat">

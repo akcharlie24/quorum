@@ -27,8 +27,9 @@ Everyone at this hackathon will demo healing. We demo:
 
 ### 🕸️ Layer 1 — Spider-Sense (Silent-Drift Sentry) → DETECT
 The worst scraper failure isn't a crash — it's a scraper that keeps returning valid-looking garbage (prices all $0, dates frozen, a field silently swapped). Hard failures are obvious; silent drift triggers nothing. Spider-Sense fixes that:
-- Every run, each field's output is checked against a statistical fingerprint: null rate, type check, value-distribution deviation vs the last K runs.
-- Catches both hard breaks AND semantic drift; fires Discord/Slack alerts with a before/after diff.
+- Every run, each field's output is checked against a statistical fingerprint: null rate, distinct count, mean and spread vs the last 6 runs.
+- Catches both hard breaks AND semantic drift. Alerts are raised in the console with a before/after diff, and each fires **once on the transition into alarm** rather than every cycle it stays broken.
+- **`fleet_wide`** is the flag that matters: when drift fires while every scraper is healthy, the vote had nothing to compare and could not possibly have caught it. That combination is the whole reason Layer 1 exists, and it is deliberately kept *separate* from the health badge — health reports what the vote concluded, drift reports what the vote cannot conclude.
 
 ### 📰 Layer 3 — Daily Bugle (Web Volatility Index) → LEARN
 Every detection, breakage, and heal event is telemetry. Aggregated → a live "web rot" leaderboard:
@@ -78,9 +79,9 @@ Pulled forward from Phase 2: the product is a UI where you paste **any real URL*
 - [x] `seed-demo.ts` — populates a full breakage-and-heal story into the UI without burning Bright Data credits.
 
 ### Phase 2 — Spider-Sense + Daily Bugle (Layers 1+3)
-- [ ] **2a. Drift engine**: per-field fingerprints (null rate, type, deviation vs last K runs) over the telemetry DB Phase 1 already populates.
-- [ ] **2b. Discord/Slack webhook alerts** with before/after diff (~1 hour).
-- [ ] **2c. Daily Bugle page**: volatility leaderboard across all targets, MTTD/MTTH, credits burn-down.
+- [x] **2a. Drift engine** (`drift.ts` pure statistics + `sentry.ts` persistence, `drift_alerts` table): per-field fingerprints over the telemetry DB Phase 1 already populates, wired into `runCycle`. Costs **zero Bright Data credits** — it reads consensus datasets we already stored, so `scripts/backfill-drift.ts` could replay it over all 29 historical runs retroactively.
+- [x] **2b. In-app alerting**: a Spider-Sense panel per flock and a drift marker on each flock card. No webhook — the console is where the operator already is, and a second delivery channel added surface without adding evidence.
+- [x] **2c. Daily Bugle page** (`/bugle`, `bugle.ts` + pure `volatility.ts`): volatility leaderboard across all targets with the composite score decomposed into its four weighted parts, MTTD/MTTH, and the heal-trust findings.
 
 ### Phase 3 — Real target sites
 - [ ] Pick 2 real sites (see §5), generate their Flocks, let them run on a schedule so the dashboard shows real history.
@@ -190,6 +191,16 @@ Live heal ledger (real audit trail, all programmatic, no human):
 7. **Build times**: ~6.4 min alone vs ~24.5 min with nine queued.
 
 ## 11. Status Log
+
+- **2026-08-23 (Layers 1 + 3):** Spider-Sense and the Daily Bugle built. No Bright Data credits spent — both layers read telemetry that already existed.
+  - **Layer 1.** `drift.ts` gains `alertKey`/`diffAlerts` (dedupe as a pure, tested rule: an alert is news once, not every cycle). New `sentry.ts` holds everything that touches the database, so the statistics stay unit-testable without Postgres. New `drift_alerts` table; `runSentry` wired into `runCycle` after `finishRun`. **No heal fires on drift, by design** — a fleet-wide signal has no dissenting variant and no consensus to repair against, so the honest response is an alarm, not a patch.
+  - **Backfill found real history.** Replaying the sentry over all 29 stored runs surfaced 5 genuine IMDb events, including run #15 where the dataset fell to 0 rows and both `title` and `rating` vanished entirely. All 5 have since resolved, which is why the console shows them as history rather than as open alarms.
+  - **The thesis needed a live case, and the real targets did not supply one.** No historical run was fleet-wide: every drift we found was already visible to the vote. So `seed-demo.ts` gained a sixth cycle where the *site* serves `$0` and all three scrapers agree — the Breakage Lab's v3 layout, which exists precisely to manufacture silent corruption on cue. Consensus is unanimous, all three variants are `healthy`, and `value_collapse` fires `fleet_wide`. Seeded runs go through `runSentry` itself rather than writing a hand-made alert, so the demo exercises the real code path. **This case is synthetic and labelled as the demo store; the IMDb signals are real.**
+  - **Drift is never folded into the health badge.** Health says what the vote concluded; drift says what the vote is structurally unable to conclude. A flock that is `healthy` *and* drifting is the single most interesting state in the product, and one badge cannot say both. The flock summary headline is overridden on a fleet-wide critical, because leading with "all 3 scrapers agreed" as reassurance is exactly the failure Layer 1 exists to prevent.
+  - **Layer 3.** `volatility.ts` (pure: weights + score, 6 tests) and `bugle.ts` (queries) behind `/bugle`. The composite is rendered decomposed into its four weighted contributions so it is auditable rather than asserted, and every row prints its sample size — with single-digit run counts these are indicative, not authoritative, and the page says so. Current index: imdb-top-250 44, github-repos 33, steam-prices 31, ikea-desks 30, seed-demo-store 11.
+  - **Note for whoever restarts the dev server:** the schema change regenerated the Prisma client, and a dev server started before that keeps the stale one — every API route 500s on `prisma.<model> is undefined` until it is restarted. Verified clean via `next build` + `next start`.
+  - Tests: 35 passing — 17 consensus, 12 drift (4 new, covering the dedupe rule), 6 volatility.
+
 
 - **2026-08-23 (later):** UI follow-ups plus a stack upgrade, still on `ui-tweaks`.
   - **Stack:** Next **16.3.2** on Turbopack (was 15 on webpack), React 19.2, **Tailwind CSS v4** and **shadcn/ui** primitives (Radix Select + Tooltip, `cn()`, CVA, lucide-react, `tw-animate-css`). The hand-authored design system moved to `app/design-system.css` and is imported `layer(components)`, with its tokens re-exported through `@theme inline` — so Tailwind utilities (in `@layer utilities`) override component CSS without `!important`, and every colour still has one source of truth.
